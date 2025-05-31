@@ -1,0 +1,9 @@
+struct x = <T, T1>{
+	a: T,
+	b: T1
+}
+
+struct y = <T impl ToString>{
+	a: T
+}
+

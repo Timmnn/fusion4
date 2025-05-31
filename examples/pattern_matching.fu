@@ -1,0 +1,19 @@
+age := 20
+
+match age {
+	_ > 18: print("You can come in :)")
+	_ == 18: print("Sorry you're to young :(")
+}
+
+
+struct Person {
+	name: string
+}
+
+me := Person{name: "Timm"}
+
+
+x := match me.name.len() {
+	_ > 5: 1
+	_ => 2
+}

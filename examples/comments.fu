@@ -1,0 +1,9 @@
+// Inline Comment
+
+let x = 5 // Inline Comment after a statement
+
+/*
+
+Multiline Comment
+
+*/

@@ -1,0 +1,120 @@
+/*
+    --------------------------------------------------
+    WHITESPACES AND COMMENTS
+    --------------------------------------------------
+*/
+comment    = _{ "//" ~ (!NEWLINE ~ ANY)* }
+WHITESPACE = _{ (" " | "\t" | comment)+ }
+
+NEWLINE              = _{ "\n" | "\r\n" }
+expression_seperator = _{ NEWLINE | ";" }
+parameter_seperator  = _{ NEWLINE | "," }
+/*
+    --------------------------------------------------
+    PROGRAM STRUCTURE
+    --------------------------------------------------
+*/
+program = { SOI ~ expression ~ (expression_seperator+ ~ expression)* ~ expression_seperator* ~ EOI }
+// A block creates a new scope and may return a value. like a function thats called instantly with every variable as a parameter.
+block = { "{" ~ expression? ~ (expression_seperator+ ~ expression)* ~ expression_seperator* ~ "}" }
+// Identifiers
+ident = @{
+    ((alpha ~ (alpha | digit | "_")*) | (digit ~ alpha ~ (alpha | digit | "_")*) | ("_" ~ alpha ~ (alpha | digit | "_")*))
+}
+alpha = _{ 'a'..'z' | 'A'..'Z' | "*" | "#" | "~" | "^" | "$" }
+digit = _{ '0'..'9' }
+
+expression = { c_import | func_def | str_lit | return_expr | func_call | var_decl | struct_def | assignment | add_expr | struct_field_access | float_lit | int_lit | var_access }
+
+add_expr = { mul_expr ~ ((add | subtract) ~ mul_expr)* }
+
+mul_expr = { primary ~ ((multiply | divide) ~ primary)* }
+
+var_access = { ident }
+
+return_expr = { "return" ~ expression }
+
+primary = {
+    float_lit
+  | int_lit
+  | str_lit
+  | func_call
+  | struct_init
+  | struct_field_access
+  | block
+  | var_access
+  | func_def
+  | "(" ~ expression ~ ")"
+}
+
+/*
+    --------------------------------------------------
+    OPERATORS
+    --------------------------------------------------
+*/
+add              = { "+" }
+subtract         = { "-" }
+multiply         = { "*" }
+divide           = { "/" }
+and              = { "and" }
+or               = { "or" }
+equal            = { "==" }
+greater_than     = { ">" }
+less_than        = { "<" }
+unequal          = { "!=" }
+greater_or_equal = { ">=" }
+less_or_equal    = { "<=" }
+/*
+    --------------------------------------------------
+    VALUE LITERALS
+    --------------------------------------------------
+*/
+int_lit      =  { "-"? ~ ASCII_DIGIT+ }
+str_lit      =  { "\"" ~ inner_string ~ "\"" }
+inner_string = @{
+    (!("\"" | "\\") ~ ANY | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t") | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4}))*
+}
+float_lit    = @{ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+ }
+/*
+    --------------------------------------------------
+    FUNCTIONS
+    --------------------------------------------------
+*/
+func_def       = { "fn" ~ ident ~ generic_typing? ~ "(" ~ param_def_list? ~ ")" ~ return_type? ~ block }
+generic_typing = { "<" ~ ident+ ~ ">" }
+return_type    = { ident }
+param_def_list = { field_def ~ ("," ~ field_def)* }
+func_call      = { ident ~ generic_params? ~ "(" ~ param_list? ~ ")" }
+generic_params = { "<" ~ ident ~ ("," ~ ident)* ~ ">" }
+param_list     = { expression ~ ("," ~ expression)* }
+/*
+    --------------------------------------------------
+    STRUCTS
+    --------------------------------------------------
+*/
+struct_def          =  { "struct" ~ ident ~ "=" ~ "{" ~ struct_def_content? ~ "}" }
+struct_def_content  =  { NEWLINE ~ field_def ~ ((NEWLINE | ",") ~ field_def)* ~ NEWLINE* }
+field_ident         = @{ (alpha | digit)+ }
+field_def           =  { field_ident ~ ":" ~ ident }
+struct_init         =  { ident ~ "{" ~ NEWLINE* ~ struct_field_init ~ (parameter_seperator ~ struct_field_init)* ~ NEWLINE* ~ "}" }
+struct_field_init   =  { ident ~ ":" ~ expression }
+struct_field_access =  { ident ~ "." ~ ident }
+/*
+    --------------------------------------------------
+    TYPE ALIAS
+    --------------------------------------------------
+*/
+type_alias = { "type" ~ ident ~ "=" ~ ident }
+/*
+    --------------------------------------------------
+    VARIABLE ASSIGNMENTS
+    --------------------------------------------------
+*/
+assignment = _{ ident ~ "=" ~ expression }
+var_decl   =  { "let" ~ ident ~ "=" ~ expression ~ "as" ~ ident }
+/*
+    --------------------------------------------------
+    C IMPORT
+    --------------------------------------------------
+*/
+c_import = { "_c_import" ~ str_lit }

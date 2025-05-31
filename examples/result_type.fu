@@ -1,0 +1,11 @@
+enum Result = <TOk,TErr>{
+	Ok(TOk),
+	TErr(TErr)
+
+	fn unwrap(&self) TOk {
+		match self {
+			Result.Ok(val): val
+			_: panic!()
+		}
+	}
+}

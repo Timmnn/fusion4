@@ -1,0 +1,24 @@
+trait ToString {
+	toString(&self) string
+}
+
+trait WithDefaultImpl {
+	toString(&self) string {
+		return "default"
+	}
+}
+
+
+struct x = {}
+
+impl x for ToString {
+	toString(&self) {
+		return "implemented function"
+	}
+}
+
+
+
+fn takes_trait(a: ToString){
+	println(a.toString())
+}

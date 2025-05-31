@@ -1,0 +1,22 @@
+
+
+struct X = {
+	a: i32 = 5
+	b: f32
+	fn sum(&self) {
+		return a+b	
+	}
+	fn add_two(a: i32) a + 2
+}
+
+
+let y = X {
+	a: 5 // Optional
+	b: .5
+}
+
+y.sum() // 5.5
+
+X.add_two(5) // 7
+
+

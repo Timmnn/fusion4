@@ -1,0 +1,10 @@
+enum x = {
+	A
+	B
+}
+
+enum y = {
+	A(i32)
+	B(string)
+	C(x: i32, y: f64)
+}

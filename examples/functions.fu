@@ -1,0 +1,17 @@
+fn with_return_value(){
+	return 5
+}
+
+let x = with_return_value()
+
+fn with_params(a: i32, b: f32) {
+	return a + b
+}
+
+with_params(5, .8)
+
+
+
+fn with_return_type() i32 {
+	return 5
+}
