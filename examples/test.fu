@@ -1,23 +1,8 @@
-_c_import "<stdio.h>"
+import {add} from "/home/timm/Dev/fusion3/examples/exports.fu"
 
-struct Player = {
-	name: string
-	health: float
-}
-
-fn get_name(player: Player) string {
-	return player.name
-}
-
-fn get_health(player: Player) float {
-	return player.health * 13.785
+pub fn exports_add(a: int, b: int) int {
+	return a + b
 }
 
 
-let x = 1.58 as float
-let name = "Hans" as string
-
-let player = Player { name: name, health: x } as Player
-
-printf("%s\n", get_name(player))
-printf("%f\n", get_health(player))
+exports_add(1, 2)

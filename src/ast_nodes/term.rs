@@ -1,8 +1,5 @@
 use super::expression::{ExpressionNode, Indent, IndentDisplay};
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Formatter, Result},
-};
+use std::fmt::{Debug, Formatter, Result};
 
 #[derive(Debug, Clone)]
 pub struct VarDeclNode {
@@ -18,7 +15,7 @@ pub struct StructInitNode {
 }
 
 impl IndentDisplay for StructInitNode {
-    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+    fn fmt_with_indent(&self, _f: &mut Formatter<'_>, _indent: Indent) -> Result {
         Ok(())
     }
 }
@@ -30,7 +27,7 @@ pub struct StructFieldInitNode {
 }
 
 impl IndentDisplay for StructFieldInitNode {
-    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+    fn fmt_with_indent(&self, _f: &mut Formatter<'_>, _indent: Indent) -> Result {
         Ok(())
     }
 }

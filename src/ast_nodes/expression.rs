@@ -69,6 +69,20 @@ pub enum ExpressionKind {
     StrLit(String),
     StructDef(StructDefNode),
     StructFieldAccess(StructFieldAccessNode),
+    Import(ImportNode),
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportNode {
+    pub values: Vec<String>,
+    pub module: String,
+}
+impl IndentDisplay for ImportNode {
+    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+        let _ = write!(f, "{}{}", indent.as_str(), self.module);
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +124,7 @@ impl IndentDisplay for ExpressionKind {
             ExpressionKind::IntLit(_) => "IntLit()".on_truecolor(25, 67, 1).black(),
             ExpressionKind::StrLit(_) => "StrLit()".on_truecolor(5, 67, 1).black(),
             ExpressionKind::StructDef(_) => "StructDef()".on_truecolor(5, 78, 155).black(),
+            ExpressionKind::Import(_) => "Import()".on_truecolor(5, 78, 155).black(),
             ExpressionKind::StructFieldAccess(_) => {
                 "StructFieldAccess()".on_truecolor(5, 78, 155).black()
             }
@@ -125,6 +140,7 @@ impl IndentDisplay for ExpressionKind {
             ExpressionKind::CImport(_) => Ok(()),
             ExpressionKind::FuncCall(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::StructFieldAccess(node) => node.fmt_with_indent(f, indent.increment(1)),
+            ExpressionKind::Import(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::StrLit(_) => writeln!(
                 f,
                 "{}{}",

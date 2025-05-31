@@ -8,7 +8,7 @@ WHITESPACE = _{ (" " | "\t" | comment)+ }
 
 NEWLINE              = _{ "\n" | "\r\n" }
 expression_seperator = _{ NEWLINE | ";" }
-parameter_seperator  = _{ NEWLINE | "," }
+parameter_seperator  =  { NEWLINE | "," }
 /*
     --------------------------------------------------
     PROGRAM STRUCTURE
@@ -24,11 +24,13 @@ ident = @{
 alpha = _{ 'a'..'z' | 'A'..'Z' | "*" | "#" | "~" | "^" | "$" }
 digit = _{ '0'..'9' }
 
-expression = { c_import | func_def | str_lit | return_expr | func_call | var_decl | struct_def | assignment | add_expr | struct_field_access | float_lit | int_lit | var_access }
+expression = { c_import | import | func_def | str_lit | return_expr | func_call | var_decl | struct_def | assignment | add_expr | struct_field_access | float_lit | int_lit | var_access }
 
 add_expr = { mul_expr ~ ((add | subtract) ~ mul_expr)* }
 
 mul_expr = { primary ~ ((multiply | divide) ~ primary)* }
+
+import = { "import {" ~ ident ~ (", " ~ ident)* ~ "} from" ~ str_lit  }
 
 var_access = { ident }
 
@@ -80,7 +82,7 @@ float_lit    = @{ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+ }
     FUNCTIONS
     --------------------------------------------------
 */
-func_def       = { "fn" ~ ident ~ generic_typing? ~ "(" ~ param_def_list? ~ ")" ~ return_type? ~ block }
+func_def       = { "pub"? ~ "fn" ~ ident ~ generic_typing? ~ "(" ~ param_def_list? ~ ")" ~ return_type? ~ block }
 generic_typing = { "<" ~ ident+ ~ ">" }
 return_type    = { ident }
 param_def_list = { field_def ~ ("," ~ field_def)* }
@@ -111,7 +113,7 @@ type_alias = { "type" ~ ident ~ "=" ~ ident }
     --------------------------------------------------
 */
 assignment = _{ ident ~ "=" ~ expression }
-var_decl   =  { "let" ~ ident ~ "=" ~ expression ~ "as" ~ ident }
+var_decl   =  { "let" ~ ident ~ "=" ~ expression }
 /*
     --------------------------------------------------
     C IMPORT

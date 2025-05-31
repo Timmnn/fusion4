@@ -51,7 +51,7 @@ fn main() {
 
     println!("{}{}", "AST:\n".purple(), ast);
 
-    let code = gen_code(ast);
+    let code = gen_code(ast, "$_".to_string());
 
     println!(
         "\n\n{}\n--------------------\n{}\n--------------------\n\n",

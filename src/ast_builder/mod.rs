@@ -1,10 +1,10 @@
-use std::{collections::HashMap, vec};
+use std::vec;
 
 use crate::ast_nodes::{
     block::BlockNode,
     expression::{
-        AddExprNode, AddExprPart, AddOp, CImportNode, ExpressionKind, ExpressionNode, MulExprNode,
-        MulExprPart, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode,
+        AddExprNode, AddExprPart, AddOp, CImportNode, ExpressionKind, ExpressionNode, ImportNode,
+        MulExprNode, MulExprPart, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode,
     },
     func_call::FuncCallNode,
     func_def::{FuncDefNode, FuncParam, GenericTypingNode},
@@ -56,11 +56,33 @@ fn build_expression(pair: Pair) -> ExpressionNode {
         Rule::struct_field_access => {
             ExpressionKind::StructFieldAccess(build_struct_field_access(expr))
         }
+        Rule::import => ExpressionKind::Import(build_import(expr)),
+
         _ => panic!("Invalid node in expression: {:?}", expr.as_rule()),
     };
 
     ExpressionNode {
         kind: expression_kind,
+    }
+}
+
+fn build_import(pair: Pair) -> ImportNode {
+    let mut inner = pair.into_inner();
+
+    let mut values = vec![];
+    let mut name = None;
+
+    for pair in inner {
+        match pair.as_rule() {
+            Rule::ident => values.push(pair.as_str().to_string()),
+            Rule::str_lit => name = Some(pair.as_str().to_string()),
+            _ => panic!("Invalid pair in import {:?}", pair.as_rule()),
+        }
+    }
+
+    ImportNode {
+        values,
+        module: name.unwrap(),
     }
 }
 
@@ -90,8 +112,6 @@ fn build_struct_def(pair: Pair) -> StructDefNode {
 }
 
 fn build_struct_field_def(pair: Pair) -> StructFieldNode {
-    println!("SFD {}", pair);
-
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().to_string();
     let type_name = inner.next().unwrap().as_str().to_string();
