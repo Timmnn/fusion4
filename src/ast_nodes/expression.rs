@@ -101,8 +101,14 @@ impl IndentDisplay for ImportNode {
 }
 
 #[derive(Debug, Clone)]
+pub enum CImportValueType {
+    Struct,
+}
+
+#[derive(Debug, Clone)]
 pub struct CImportNode {
     pub module: String,
+    pub values: Vec<(String, CImportValueType)>,
 }
 impl IndentDisplay for CImportNode {
     fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {

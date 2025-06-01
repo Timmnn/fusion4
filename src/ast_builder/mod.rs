@@ -3,8 +3,9 @@ use std::vec;
 use crate::ast_nodes::{
     block::BlockNode,
     expression::{
-        AddExprNode, AddExprPart, AddOp, CImportNode, ExpressionKind, ExpressionNode, ImportNode,
-        MulExprNode, MulExprPart, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode, WhileLoopNode,
+        AddExprNode, AddExprPart, AddOp, CImportNode, CImportValueType, ExpressionKind,
+        ExpressionNode, ImportNode, MulExprNode, MulExprPart, MulOp, PrimaryKind, PrimaryNode,
+        ReturnExprNode, WhileLoopNode,
     },
     func_call::FuncCallNode,
     func_def::{FuncDefNode, FuncParam, GenericTypingNode},
@@ -127,10 +128,22 @@ fn build_struct_field_def(pair: Pair) -> StructFieldNode {
 }
 
 fn build_c_import(pair: Pair) -> CImportNode {
-    let string = pair.into_inner().next().unwrap().as_str().to_string();
+    let mut inner = pair.into_inner();
+
+    let string = inner.next().unwrap().as_str().to_string();
+
+    let mut values = vec![];
+    while inner.len() > 0 {
+        println!("dbg {}", inner);
+
+        let name = inner.next().unwrap().as_str().to_string();
+        let import_type = inner.next().unwrap();
+        values.push((name, CImportValueType::Struct));
+    }
 
     CImportNode {
         module: string[1..(string.len() - 1)].to_string(),
+        values,
     }
 }
 fn build_return_expr(pair: Pair) -> ReturnExprNode {
@@ -198,7 +211,7 @@ fn build_primary(pair: Pair) -> PrimaryNode {
 
     let kind = match primary.as_rule() {
         Rule::var_access => PrimaryKind::VarAccess(build_var_access(primary)),
-        Rule::int_lit => PrimaryKind::IntLit(primary.as_str().parse().unwrap()),
+        Rule::int_lit => PrimaryKind::IntLit(primary.as_str().trim().parse().unwrap()),
         Rule::str_lit => PrimaryKind::StrLit(primary.as_str().to_string()),
         Rule::float_lit => PrimaryKind::FloatLit(primary.as_str().parse().unwrap()),
         Rule::struct_init => PrimaryKind::StructInit(build_struct_init(primary)),

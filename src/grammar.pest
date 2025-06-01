@@ -100,7 +100,7 @@ struct_def          =  { "struct" ~ ident ~ "=" ~ "{" ~ struct_def_content? ~ "}
 struct_def_content  =  { NEWLINE ~ field_def ~ ((NEWLINE | ",") ~ field_def)* ~ NEWLINE* }
 field_ident         = @{ (alpha | digit)+ }
 field_def           =  { field_ident ~ ":" ~ ident }
-struct_init         =  { ident ~ "{" ~ NEWLINE* ~ struct_field_init ~ (parameter_seperator ~ struct_field_init)* ~ NEWLINE* ~ "}" }
+struct_init         =  { ident ~ "{" ~ NEWLINE* ~ struct_field_init* ~ (parameter_seperator ~ struct_field_init)* ~ NEWLINE* ~ "}" }
 struct_field_init   =  { ident ~ ":" ~ expression }
 struct_field_access =  { ident ~ "." ~ ident }
 /*
@@ -121,4 +121,4 @@ var_decl   =  { "let" ~ ident ~ "=" ~ expression ~ "as" ~ ident}
     C IMPORT
     --------------------------------------------------
 */
-c_import = { "_c_import" ~ str_lit }
+c_import = { "_c_import" ~ str_lit ~ "(" ~ (ident ~ ":" ~ ident)+ ~ ")" }

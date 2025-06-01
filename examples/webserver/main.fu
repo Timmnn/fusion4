@@ -1,2 +1,12 @@
+_c_import "<arpa/inet.h>" (sockaddr_in:struct )
+
 let PORT = 8000 as int
 let BUFFER_SIZE = 104857600 as int
+
+while 1 {
+	let x = 1 as int
+	let server_fd = 0 as int
+	let new_socket = 0 as int
+
+	let server_addr = sockaddr_in {} as sockaddr_in
+}

@@ -77,10 +77,6 @@ impl Default for Context {
     }
 }
 
-struct CodeGenResult {
-    code: String,
-}
-
 pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
     let mut ctx = Context::new(compiler_prefix);
     walk_program(program, &mut ctx);
@@ -105,7 +101,8 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
         .join(";");
 
     format!(
-        "{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}",
+        ctx.imports.join(";"),
         default_type_defs.join(""),
         ctx.global_variables
             .iter()
@@ -250,6 +247,15 @@ fn walk_str_lit(str: String, _ctx: &mut Context) -> String {
 fn walk_c_import(node: CImportNode, ctx: &mut Context) {
     ctx.imports
         .push(format!("#include {}\n", node.module.as_str()));
+
+    for value in node.values {
+        ctx.struct_definitions
+            .push(create_struct_alias(value.0, ctx));
+    }
+}
+
+fn create_struct_alias(name: String, ctx: &Context) -> String {
+    format!("; typedef struct {name} {name};", name = name,)
 }
 
 fn walk_return_expr(ret: ReturnExprNode, ctx: &mut Context) -> String {
@@ -370,11 +376,14 @@ fn walk_func_call(func_call: FuncCallNode, ctx: &mut Context) -> String {
 }
 
 fn walk_block(block: BlockNode, ctx: &mut Context) -> String {
+    ctx.scope_stack.push("Block".to_string());
     let results: Vec<String> = block
         .expressions
         .into_iter()
         .map(|expr| walk_expression(expr, ctx) + ";\n")
         .collect();
+
+    ctx.scope_stack.pop();
 
     results.join("")
 }
