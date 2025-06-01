@@ -4,7 +4,7 @@ use crate::ast_nodes::{
     block::BlockNode,
     expression::{
         AddExprNode, AddExprPart, AddOp, CImportNode, ExpressionKind, ExpressionNode, ImportNode,
-        MulExprNode, MulExprPart, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode,
+        MulExprNode, MulExprPart, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode, WhileLoopNode,
     },
     func_call::FuncCallNode,
     func_def::{FuncDefNode, FuncParam, GenericTypingNode},
@@ -38,7 +38,6 @@ fn build_program(pair: Pair) -> ProgramNode {
 }
 
 fn build_expression(pair: Pair) -> ExpressionNode {
-    println!("EXPR: {}", pair);
     let mut inner = pair.into_inner();
 
     let expr = inner.next().expect("Expression has to have a child node");
@@ -57,7 +56,7 @@ fn build_expression(pair: Pair) -> ExpressionNode {
             ExpressionKind::StructFieldAccess(build_struct_field_access(expr))
         }
         Rule::import => ExpressionKind::Import(build_import(expr)),
-
+        Rule::while_loop => ExpressionKind::WhileLoop(build_while_loop(expr)),
         _ => panic!("Invalid node in expression: {:?}", expr.as_rule()),
     };
 
@@ -66,8 +65,17 @@ fn build_expression(pair: Pair) -> ExpressionNode {
     }
 }
 
-fn build_import(pair: Pair) -> ImportNode {
+fn build_while_loop(pair: Pair) -> WhileLoopNode {
     let mut inner = pair.into_inner();
+
+    let condition = Box::new(build_expression(inner.next().unwrap()));
+    let block = build_block(inner.next().unwrap());
+
+    WhileLoopNode { condition, block }
+}
+
+fn build_import(pair: Pair) -> ImportNode {
+    let inner = pair.into_inner();
 
     let mut values = vec![];
     let mut name = None;
@@ -104,7 +112,6 @@ fn build_struct_def(pair: Pair) -> StructDefNode {
     let struct_def_content = inner.next().unwrap();
 
     for field_def in struct_def_content.into_inner() {
-        println!("field_def {}", field_def);
         fields.push(build_struct_field_def(field_def));
     }
 
@@ -218,7 +225,6 @@ fn build_struct_init(pair: Pair) -> StructInitNode {
 }
 
 fn build_struct_field_init(pair: Pair) -> StructFieldInitNode {
-    println!("456DBG {:?}", pair);
     let mut inner = pair.into_inner();
     StructFieldInitNode {
         name: inner.next().unwrap().as_str().to_string(),

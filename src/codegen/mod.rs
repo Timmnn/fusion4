@@ -8,7 +8,7 @@ use crate::{
         block::BlockNode,
         expression::{
             AddExprNode, AddOp, CImportNode, ExpressionKind, ExpressionNode, ImportNode,
-            MulExprNode, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode,
+            MulExprNode, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode, WhileLoopNode,
         },
         func_call::FuncCallNode,
         func_def::{FuncDefNode, FuncParam},
@@ -31,7 +31,8 @@ struct FuncDeclaration {
 }
 
 struct Context {
-    function_declarations: HashMap<String, FuncDeclaration>,
+    pub scope_stack: Vec<String>,
+    pub function_declarations: HashMap<String, FuncDeclaration>,
     pub generic_function_declarations: HashMap<String, GenericFuncDeclaration>,
     pub main_function_content: String,
     pub struct_definitions: Vec<String>,
@@ -39,11 +40,13 @@ struct Context {
     pub generic_function_implementations: HashMap<Vec<String>, String>,
     pub compiler_prefix: String,
     pub modules: HashMap<String, Context>,
+    pub global_variables: Vec<String>,
 }
 
 impl Context {
     pub fn new(prefix: String) -> Self {
         Self {
+            scope_stack: vec!["Global".to_string()],
             function_declarations: HashMap::new(),
             struct_definitions: vec![],
             generic_function_declarations: HashMap::new(),
@@ -52,6 +55,7 @@ impl Context {
             imports: vec![],
             compiler_prefix: prefix,
             modules: HashMap::new(),
+            global_variables: vec![],
         }
     }
 }
@@ -59,6 +63,7 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
+            scope_stack: vec!["Global".to_string()],
             function_declarations: HashMap::new(),
             struct_definitions: vec![],
             generic_function_declarations: HashMap::new(),
@@ -67,6 +72,7 @@ impl Default for Context {
             imports: vec![],
             compiler_prefix: "".to_string(),
             modules: HashMap::new(),
+            global_variables: vec![],
         }
     }
 }
@@ -98,14 +104,14 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
         .collect::<Vec<String>>()
         .join(";");
 
-    println!(
-        "DBG3 {:?} || {:?} || {:?}",
-        modules_code, ctx.function_declarations, ctx.struct_definitions
-    );
-
     format!(
-        "{}{}{}{}{}",
+        "{}{}{}{}{}{}",
         default_type_defs.join(""),
+        ctx.global_variables
+            .iter()
+            .map(|v| format!("{};", v))
+            .collect::<Vec<_>>()
+            .join(""),
         modules_code,
         ctx.struct_definitions.join(""),
         /*ctx.function_declarations
@@ -143,6 +149,7 @@ fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
             walk_c_import(node, ctx);
             String::from("")
         }
+        ExpressionKind::WhileLoop(node) => walk_while_loop(node, ctx),
         ExpressionKind::Import(node) => {
             walk_import(node, ctx);
             String::from("")
@@ -157,6 +164,14 @@ fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
         ExpressionKind::StructFieldAccess(node) => walk_struct_field_access(node, ctx),
         ExpressionKind::VarDecl(node) => walk_var_decl(node, ctx),
     }
+}
+
+fn walk_while_loop(node: WhileLoopNode, ctx: &mut Context) -> String {
+    format!(
+        "while({}){{ {} }}",
+        walk_expression(*node.condition, ctx),
+        walk_block(node.block, ctx)
+    )
 }
 
 fn walk_import(node: ImportNode, ctx: &mut Context) {
@@ -200,7 +215,14 @@ fn walk_import(node: ImportNode, ctx: &mut Context) {
 fn walk_var_decl(node: VarDeclNode, ctx: &mut Context) -> String {
     let value = walk_expression(*node.value, ctx);
 
-    format!("{} {} = {}", node.var_type, node.name, value)
+    let code = format!("{} {} = {}", node.var_type, node.name, value);
+
+    if ctx.scope_stack.last().unwrap() == "Global" {
+        ctx.global_variables.push(code);
+        return "".to_string();
+    }
+
+    code
 }
 
 fn walk_struct_field_access(node: StructFieldAccessNode, _ctx: &mut Context) -> String {
@@ -302,8 +324,6 @@ fn walk_func_call(func_call: FuncCallNode, ctx: &mut Context) -> String {
         .compiler_name
         .clone();
 
-    println!("DBG {}", compiler_name);
-
     if let Some(generic_func) = ctx.generic_function_declarations.get(&func_call.name) {
         let node = generic_func.node.clone();
 
@@ -349,16 +369,14 @@ fn walk_func_call(func_call: FuncCallNode, ctx: &mut Context) -> String {
     format!("{}({})", compiler_name, params_code)
 }
 
-fn walk_block(block: BlockNode, ctx: &mut Context) -> CodeGenResult {
+fn walk_block(block: BlockNode, ctx: &mut Context) -> String {
     let results: Vec<String> = block
         .expressions
         .into_iter()
         .map(|expr| walk_expression(expr, ctx) + ";\n")
         .collect();
 
-    CodeGenResult {
-        code: results.join(""),
-    }
+    results.join("")
 }
 
 fn walk_func_def(node: FuncDefNode, ctx: &mut Context) {
@@ -372,7 +390,7 @@ fn walk_func_def(node: FuncDefNode, ctx: &mut Context) {
         },
         name,
         walk_func_def_params(node.clone().params, ctx),
-        walk_block(node.clone().body, ctx).code
+        walk_block(node.clone().body, ctx)
     )
     .to_string();
 
@@ -394,8 +412,6 @@ fn walk_func_def(node: FuncDefNode, ctx: &mut Context) {
             code: code.clone(),
         },
     );
-
-    println!("DBG2 {} {}", code, name);
 }
 
 fn walk_func_def_params(params: Vec<FuncParam>, _ctx: &mut Context) -> String {

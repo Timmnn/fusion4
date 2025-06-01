@@ -1,8 +1,3 @@
-import {add} from "/home/timm/Dev/fusion3/examples/exports.fu"
-
-pub fn exports_add(a: int, b: int) int {
-	return a + b
+while x {
+	y
 }
-
-
-exports_add(1, 2)

@@ -1,7 +1,7 @@
 mod ast_builder;
-
 mod ast_nodes;
 mod codegen;
+mod logger;
 mod parser;
 
 use ast_builder::build_ast_from_pairs;

@@ -1,0 +1,2 @@
+let PORT = 8000 as int
+let BUFFER_SIZE = 104857600 as int

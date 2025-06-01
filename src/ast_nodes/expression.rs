@@ -70,6 +70,21 @@ pub enum ExpressionKind {
     StructDef(StructDefNode),
     StructFieldAccess(StructFieldAccessNode),
     Import(ImportNode),
+    WhileLoop(WhileLoopNode),
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileLoopNode {
+    pub condition: Box<ExpressionNode>,
+    pub block: BlockNode,
+}
+
+impl IndentDisplay for WhileLoopNode {
+    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+        let _ = write!(f, "{}{}", indent.as_str(), "");
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -117,6 +132,7 @@ impl IndentDisplay for ExpressionKind {
             ExpressionKind::VarDecl(_) => "VarDecl".on_truecolor(100, 150, 200).black(),
             ExpressionKind::FuncDef(_) => "FuncDef".on_truecolor(10, 150, 200).black(),
             ExpressionKind::ReturnExpr(_) => "ReturnExpr".on_truecolor(50, 150, 200).black(),
+            ExpressionKind::WhileLoop(_) => "WhileLoop".on_truecolor(50, 150, 200).black(),
             ExpressionKind::CImport(node) => format!("CImport({})", node.module)
                 .on_truecolor(50, 150, 200)
                 .black(),
@@ -135,6 +151,7 @@ impl IndentDisplay for ExpressionKind {
             ExpressionKind::AddExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::VarDecl(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::FuncDef(node) => node.fmt_with_indent(f, indent.increment(1)),
+            ExpressionKind::WhileLoop(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::ReturnExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::StructDef(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::CImport(_) => Ok(()),
