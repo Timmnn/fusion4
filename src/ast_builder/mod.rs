@@ -3,9 +3,9 @@ use std::vec;
 use crate::ast_nodes::{
     block::BlockNode,
     expression::{
-        AddExprNode, AddExprPart, AddOp, CImportNode, CImportValueType, ExpressionKind,
-        ExpressionNode, ImportNode, MulExprNode, MulExprPart, MulOp, PrimaryKind, PrimaryNode,
-        ReturnExprNode, WhileLoopNode,
+        AddExprNode, AddExprPart, AddOp, BoolExprNode, BoolExprPart, BoolOp, CImportNode,
+        CImportValueType, ExpressionKind, ExpressionNode, IfStatNode, ImportNode, MulExprNode,
+        MulExprPart, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode, WhileLoopNode,
     },
     func_call::FuncCallNode,
     func_def::{FuncDefNode, FuncParam, GenericTypingNode},
@@ -45,7 +45,7 @@ fn build_expression(pair: Pair) -> ExpressionNode {
 
     let expression_kind = match expr.as_rule() {
         Rule::var_decl => ExpressionKind::VarDecl(build_var_decl(expr)),
-        Rule::add_expr => ExpressionKind::AddExpr(build_add_expr(expr)),
+        //Rule::add_expr => ExpressionKind::AddExpr(build_add_expr(expr)),
         Rule::func_def => ExpressionKind::FuncDef(build_func_def(expr)),
         Rule::return_expr => ExpressionKind::ReturnExpr(build_return_expr(expr)),
         Rule::c_import => ExpressionKind::CImport(build_c_import(expr)),
@@ -56,14 +56,27 @@ fn build_expression(pair: Pair) -> ExpressionNode {
         Rule::struct_field_access => {
             ExpressionKind::StructFieldAccess(build_struct_field_access(expr))
         }
+        Rule::bool_expr => ExpressionKind::BoolExpr(build_bool_expr(expr)),
         Rule::import => ExpressionKind::Import(build_import(expr)),
         Rule::while_loop => ExpressionKind::WhileLoop(build_while_loop(expr)),
+        Rule::if_stat => ExpressionKind::IfStat(build_if_stat(expr)),
+        Rule::reference => ExpressionKind::Reference(Box::new(expr)),
+        Rule::deref => ExpressionKind::Deref(Box::new(expr)),
         _ => panic!("Invalid node in expression: {:?}", expr.as_rule()),
     };
 
     ExpressionNode {
         kind: expression_kind,
     }
+}
+
+fn build_if_stat(pair: Pair) -> IfStatNode {
+    let mut inner = pair.into_inner();
+
+    let condition = Box::new(build_expression(inner.next().unwrap()));
+    let block = build_block(inner.next().unwrap());
+
+    IfStatNode { condition, block }
 }
 
 fn build_while_loop(pair: Pair) -> WhileLoopNode {
@@ -138,7 +151,16 @@ fn build_c_import(pair: Pair) -> CImportNode {
 
         let name = inner.next().unwrap().as_str().to_string();
         let import_type = inner.next().unwrap();
-        values.push((name, CImportValueType::Struct));
+
+        values.push((
+            name,
+            match import_type.as_str() {
+                "struct" => CImportValueType::Struct,
+                "type" => CImportValueType::Type,
+                "function" => CImportValueType::Function,
+                _ => panic!(),
+            },
+        ));
     }
 
     CImportNode {
@@ -154,6 +176,30 @@ fn build_return_expr(pair: Pair) -> ReturnExprNode {
     ReturnExprNode {
         expression: Box::new(expr),
     }
+}
+
+fn build_bool_expr(pair: Pair) -> BoolExprNode {
+    let mut inner = pair.into_inner();
+
+    let left_pair = inner.next().unwrap();
+    let left = build_add_expr(left_pair);
+
+    let mut comparison = vec![];
+    while inner.len() > 0 {
+        let op_pair = inner.next().unwrap();
+
+        let operator = match op_pair.as_rule() {
+            Rule::equal => BoolOp::Equal,
+            Rule::less_than => BoolOp::LessThan,
+            rule => panic!("{:?}", rule),
+        };
+
+        let right = build_add_expr(inner.next().unwrap());
+
+        comparison.push(BoolExprPart { operator, right });
+    }
+
+    BoolExprNode { left, comparison }
 }
 
 fn build_add_expr(pair: Pair) -> AddExprNode {
@@ -215,9 +261,11 @@ fn build_primary(pair: Pair) -> PrimaryNode {
         Rule::str_lit => PrimaryKind::StrLit(primary.as_str().to_string()),
         Rule::float_lit => PrimaryKind::FloatLit(primary.as_str().parse().unwrap()),
         Rule::struct_init => PrimaryKind::StructInit(build_struct_init(primary)),
+        Rule::func_call => PrimaryKind::FuncCall(build_func_call(primary)),
         Rule::struct_field_access => {
             PrimaryKind::StructFieldAccess(build_struct_field_access(primary))
         }
+
         _ => todo!("{:?}", primary),
     };
 

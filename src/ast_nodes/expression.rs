@@ -71,6 +71,24 @@ pub enum ExpressionKind {
     StructFieldAccess(StructFieldAccessNode),
     Import(ImportNode),
     WhileLoop(WhileLoopNode),
+    IfStat(IfStatNode),
+    BoolExpr(BoolExprNode),
+    Reference(Box<ExpressionNode>),
+    Deref(Box<ExpressionNode>),
+}
+
+#[derive(Debug, Clone)]
+pub struct IfStatNode {
+    pub condition: Box<ExpressionNode>,
+    pub block: BlockNode,
+}
+
+impl IndentDisplay for IfStatNode {
+    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+        let _ = write!(f, "{}{}", indent.as_str(), "");
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +121,8 @@ impl IndentDisplay for ImportNode {
 #[derive(Debug, Clone)]
 pub enum CImportValueType {
     Struct,
+    Type,
+    Function,
 }
 
 #[derive(Debug, Clone)]
@@ -135,10 +155,12 @@ impl IndentDisplay for ExpressionKind {
     fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
         let string = match self {
             ExpressionKind::AddExpr(_) => "AddExpr".on_truecolor(100, 149, 237).black(),
+            ExpressionKind::BoolExpr(_) => "BoolExpr".on_truecolor(100, 149, 237).black(),
             ExpressionKind::VarDecl(_) => "VarDecl".on_truecolor(100, 150, 200).black(),
             ExpressionKind::FuncDef(_) => "FuncDef".on_truecolor(10, 150, 200).black(),
             ExpressionKind::ReturnExpr(_) => "ReturnExpr".on_truecolor(50, 150, 200).black(),
             ExpressionKind::WhileLoop(_) => "WhileLoop".on_truecolor(50, 150, 200).black(),
+            ExpressionKind::IfStat(_) => "IfStat".on_truecolor(50, 150, 200).black(),
             ExpressionKind::CImport(node) => format!("CImport({})", node.module)
                 .on_truecolor(50, 150, 200)
                 .black(),
@@ -155,9 +177,11 @@ impl IndentDisplay for ExpressionKind {
 
         match self {
             ExpressionKind::AddExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
+            ExpressionKind::BoolExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::VarDecl(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::FuncDef(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::WhileLoop(node) => node.fmt_with_indent(f, indent.increment(1)),
+            ExpressionKind::IfStat(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::ReturnExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::StructDef(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::CImport(_) => Ok(()),
@@ -177,6 +201,77 @@ impl IndentDisplay for ExpressionKind {
                 "IntLit".on_truecolor(200, 120, 125).black()
             ),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BoolExprNode {
+    pub left: AddExprNode,
+    pub comparison: Vec<BoolExprPart>,
+}
+
+impl IndentDisplay for BoolExprNode {
+    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+        // Display left part
+        writeln!(
+            f,
+            "{}{}:",
+            indent.as_str(),
+            "Left".black().on_truecolor(200, 177, 54)
+        )?;
+        self.left.fmt_with_indent(f, indent.increment(1))?;
+
+        // Display addents if any
+        if !self.comparison.is_empty() {
+            writeln!(
+                f,
+                "{}{}",
+                indent.as_str(),
+                "Addents".on_truecolor(128, 180, 12).black(),
+            )?;
+            let inner_indent = indent.increment(1);
+            for (i, part) in self.comparison.iter().enumerate() {
+                writeln!(f, "{}[{}]:", inner_indent.as_str(), i)?;
+                part.fmt_with_indent(f, inner_indent.increment(1))?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BoolExprPart {
+    pub operator: BoolOp,
+    pub right: AddExprNode,
+}
+
+impl Display for BoolOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            BoolOp::Equal => write!(f, "=="),
+            BoolOp::LessThan => write!(f, "<"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BoolOp {
+    Equal,
+    LessThan,
+}
+
+impl IndentDisplay for BoolExprPart {
+    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
+        writeln!(
+            f,
+            "{}{}({})",
+            indent.as_str(),
+            "Operator".black().on_truecolor(199, 78, 211),
+            self.operator
+        )?;
+        writeln!(f, "{}Value:", indent.as_str())?;
+        self.right.fmt_with_indent(f, indent.increment(1))
     }
 }
 
@@ -321,6 +416,10 @@ impl IndentDisplay for PrimaryNode {
             PrimaryKind::StructFieldAccess(node) => {
                 writeln!(f, "{}StructFieldAccess({:?})", inner_indent.as_str(), node)
             }
+            PrimaryKind::FuncCall(node) => {
+                writeln!(f, "{}FuncCall({:?})", inner_indent.as_str(), node)
+            }
+
             PrimaryKind::StructInit(node) => {
                 writeln!(f, "{}StructInit({:?})", inner_indent.as_str(), node)
             }
@@ -346,6 +445,7 @@ pub enum PrimaryKind {
     IntLit(i32),
     StructInit(StructInitNode),
     StructFieldAccess(StructFieldAccessNode),
+    FuncCall(FuncCallNode),
 }
 
 #[derive(Debug, Clone)]

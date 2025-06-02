@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fmt::format, fs};
 
 use pest::Parser;
 
@@ -7,8 +7,9 @@ use crate::{
     ast_nodes::{
         block::BlockNode,
         expression::{
-            AddExprNode, AddOp, CImportNode, ExpressionKind, ExpressionNode, ImportNode,
-            MulExprNode, MulOp, PrimaryKind, PrimaryNode, ReturnExprNode, WhileLoopNode,
+            AddExprNode, AddOp, BoolExprNode, BoolOp, CImportNode, CImportValueType,
+            ExpressionKind, ExpressionNode, IfStatNode, ImportNode, MulExprNode, MulOp,
+            PrimaryKind, PrimaryNode, ReturnExprNode, WhileLoopNode,
         },
         func_call::FuncCallNode,
         func_def::{FuncDefNode, FuncParam},
@@ -136,6 +137,9 @@ fn walk_program(program: ProgramNode, ctx: &mut Context) {
 fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
     match expr.kind {
         ExpressionKind::AddExpr(node) => walk_add_expr(node, ctx),
+        ExpressionKind::BoolExpr(node) => walk_bool_expr(node, ctx),
+        ExpressionKind::Reference(node) => format!("&{}", walk_expression(*node, ctx)),
+        ExpressionKind::Deref(node) => format!("*{}", walk_expression(*node, ctx)),
         ExpressionKind::FuncDef(node) => {
             walk_func_def(node, ctx);
 
@@ -147,6 +151,7 @@ fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
             String::from("")
         }
         ExpressionKind::WhileLoop(node) => walk_while_loop(node, ctx),
+        ExpressionKind::IfStat(node) => walk_if_stat(node, ctx),
         ExpressionKind::Import(node) => {
             walk_import(node, ctx);
             String::from("")
@@ -161,6 +166,14 @@ fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
         ExpressionKind::StructFieldAccess(node) => walk_struct_field_access(node, ctx),
         ExpressionKind::VarDecl(node) => walk_var_decl(node, ctx),
     }
+}
+
+fn walk_if_stat(node: IfStatNode, ctx: &mut Context) -> String {
+    format!(
+        "if({}){{ {} }}",
+        walk_expression(*node.condition, ctx),
+        walk_block(node.block, ctx)
+    )
 }
 
 fn walk_while_loop(node: WhileLoopNode, ctx: &mut Context) -> String {
@@ -249,12 +262,25 @@ fn walk_c_import(node: CImportNode, ctx: &mut Context) {
         .push(format!("#include {}\n", node.module.as_str()));
 
     for value in node.values {
-        ctx.struct_definitions
-            .push(create_struct_alias(value.0, ctx));
+        match value.1 {
+            CImportValueType::Struct => ctx
+                .struct_definitions
+                .push(create_struct_alias(value.0, ctx)),
+            CImportValueType::Type => {}
+            CImportValueType::Function => {
+                ctx.function_declarations.insert(
+                    value.0.clone(),
+                    FuncDeclaration {
+                        compiler_name: value.0,
+                        code: "".to_string(),
+                    },
+                );
+            }
+        }
     }
 }
 
-fn create_struct_alias(name: String, ctx: &Context) -> String {
+fn create_struct_alias(name: String, _ctx: &Context) -> String {
     format!("; typedef struct {name} {name};", name = name,)
 }
 
@@ -262,13 +288,13 @@ fn walk_return_expr(ret: ReturnExprNode, ctx: &mut Context) -> String {
     format!("return {};", walk_expression(*ret.expression, ctx))
 }
 
-fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
-    let mut left_code = walk_mul_expr_node(add.left, ctx);
+fn walk_bool_expr(node: BoolExprNode, ctx: &mut Context) -> String {
+    let mut left_code = walk_add_expr(node.left, ctx);
 
-    for addent in add.addent {
-        left_code += match addent.op {
-            AddOp::Add => format!("+{}", walk_mul_expr_node(addent.value, ctx)),
-            AddOp::Subtract => format!("-{}", walk_mul_expr_node(addent.value, ctx)),
+    for addent in node.comparison {
+        left_code += match addent.operator {
+            BoolOp::Equal => format!("=={}", walk_add_expr(addent.right, ctx)),
+            BoolOp::LessThan => format!("<{}", walk_add_expr(addent.right, ctx)),
         }
         .as_str();
     }
@@ -276,7 +302,21 @@ fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
     left_code
 }
 
-fn walk_mul_expr_node(mul: MulExprNode, ctx: &mut Context) -> String {
+fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
+    let mut left_code = walk_mul_expr(add.left, ctx);
+
+    for addent in add.addent {
+        left_code += match addent.op {
+            AddOp::Add => format!("+{}", walk_mul_expr(addent.value, ctx)),
+            AddOp::Subtract => format!("-{}", walk_mul_expr(addent.value, ctx)),
+        }
+        .as_str();
+    }
+
+    left_code
+}
+
+fn walk_mul_expr(mul: MulExprNode, ctx: &mut Context) -> String {
     let mut left_code = walk_primary(mul.left, ctx);
 
     for factor in mul.factor {
@@ -293,6 +333,7 @@ fn walk_mul_expr_node(mul: MulExprNode, ctx: &mut Context) -> String {
 fn walk_primary(primary: PrimaryNode, ctx: &mut Context) -> String {
     match primary.kind {
         PrimaryKind::IntLit(val) => val.to_string(),
+        PrimaryKind::FuncCall(node) => walk_func_call(node, ctx),
         PrimaryKind::VarAccess(val) => val.name,
         PrimaryKind::FloatLit(val) => val.to_string(),
         PrimaryKind::StructInit(node) => walk_struct_init(node, ctx),

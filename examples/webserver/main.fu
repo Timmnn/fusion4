@@ -1,12 +1,64 @@
-_c_import "<arpa/inet.h>" (sockaddr_in:struct )
+_c_import "<arpa/inet.h>" (sockaddr_in:struct INADDR_ANY:function)
+_c_import "<sys/socket.h>" (socklen_t:type socket:function bind:function listen:function accept:function setsockopt:function write:function read:function SOL_SOCKET:function SO_REUSEADDR:function AF_INET:function SOCK_STREAM:function)
+_c_import "<stdio.h>" (perror:function printf:function)
+_c_import "<stdlib.h>" (exit:function EXIT_FAILURE:function)
+_c_import "<string.h>" (strlen:function)
+_c_import "<unistd.h>" (close:function)
 
-let PORT = 8000 as int
-let BUFFER_SIZE = 104857600 as int
+let PORT = 8080 as int
+let BUFFER_SIZE = 1024 as int
 
 while 1 {
-	let x = 1 as int
-	let server_fd = 0 as int
-	let new_socket = 0 as int
+    let server_fd = socket(AF_INET, SOCK_STREAM, 0) as int
+    if server_fd == 0 {
+        perror("Socket failed")
+        exit(EXIT_FAILURE)
+    }
 
-	let server_addr = sockaddr_in {} as sockaddr_in
+    let opt = 1 as int
+    let x = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, 4) as int
+
+    let server_addr = sockaddr_in {
+        sin_family: AF_INET
+        sin_port: htons(PORT)
+        sin_addr: in_addr {
+            s_addr: INADDR_ANY
+        }
+    } as sockaddr_in
+
+    let bind_result = bind(server_fd, &server_addr, 16) as int
+
+    if bind_result < 0 {
+        perror("Bind failed")
+        exit(EXIT_FAILURE)
+    }
+
+    let listen_result = listen(server_fd, 3) as int
+    if listen_result < 0 {
+        perror("Listen failed")
+        exit(EXIT_FAILURE)
+    }
+
+    printf("Server listening on port %d...\n", PORT)
+
+    while 1 {
+        let client_addr = sockaddr_in {} as sockaddr_in
+        let client_len = 16 as socklen_t
+
+        let new_socket = accept(server_fd, &client_addr, &client_len) as int
+        if new_socket < 0 {
+            perror("Accept failed")
+            continue
+        }
+
+        // let buffer = array of char with BUFFER_SIZE
+        //let _ = read(new_socket, buffer, BUFFER_SIZE)
+
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!" as *char
+        let x = write(new_socket, response, strlen(response)) as int
+
+        let x = close(new_socket) as int
+    }
+
+    let x = close(server_fd) as int
 }
