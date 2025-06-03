@@ -60,8 +60,12 @@ fn build_expression(pair: Pair) -> ExpressionNode {
         Rule::import => ExpressionKind::Import(build_import(expr)),
         Rule::while_loop => ExpressionKind::WhileLoop(build_while_loop(expr)),
         Rule::if_stat => ExpressionKind::IfStat(build_if_stat(expr)),
-        Rule::reference => ExpressionKind::Reference(Box::new(expr)),
-        Rule::deref => ExpressionKind::Deref(Box::new(expr)),
+        Rule::reference => ExpressionKind::Reference(Box::new(build_expression(
+            expr.into_inner().next().unwrap(),
+        ))),
+        Rule::deref => ExpressionKind::Deref(Box::new(build_expression(
+            expr.into_inner().next().unwrap(),
+        ))),
         _ => panic!("Invalid node in expression: {:?}", expr.as_rule()),
     };
 
@@ -147,8 +151,6 @@ fn build_c_import(pair: Pair) -> CImportNode {
 
     let mut values = vec![];
     while inner.len() > 0 {
-        println!("dbg {}", inner);
-
         let name = inner.next().unwrap().as_str().to_string();
         let import_type = inner.next().unwrap();
 
@@ -182,7 +184,7 @@ fn build_bool_expr(pair: Pair) -> BoolExprNode {
     let mut inner = pair.into_inner();
 
     let left_pair = inner.next().unwrap();
-    let left = build_add_expr(left_pair);
+    let lhs = build_add_expr(left_pair);
 
     let mut comparison = vec![];
     while inner.len() > 0 {
@@ -194,12 +196,12 @@ fn build_bool_expr(pair: Pair) -> BoolExprNode {
             rule => panic!("{:?}", rule),
         };
 
-        let right = build_add_expr(inner.next().unwrap());
+        let rhs = build_add_expr(inner.next().unwrap());
 
-        comparison.push(BoolExprPart { operator, right });
+        comparison.push(BoolExprPart { operator, rhs });
     }
 
-    BoolExprNode { left, comparison }
+    BoolExprNode { lhs, comparison }
 }
 
 fn build_add_expr(pair: Pair) -> AddExprNode {
@@ -278,7 +280,7 @@ fn build_struct_init(pair: Pair) -> StructInitNode {
     let name = inner.next().unwrap().as_str().to_string();
     let mut fields = vec![];
 
-    for pair in inner {
+    for pair in inner.enumerate().filter(|&(i, _)| i == 2).map(|(_, v)| v) {
         fields.push(build_struct_field_init(pair));
     }
 

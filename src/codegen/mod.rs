@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format, fs};
+use std::{collections::HashMap, fs};
 
 use pest::Parser;
 
@@ -136,9 +136,9 @@ fn walk_program(program: ProgramNode, ctx: &mut Context) {
 
 fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
     match expr.kind {
-        ExpressionKind::AddExpr(node) => walk_add_expr(node, ctx),
+        //ExpressionKind::AddExpr(node) => walk_add_expr(node, ctx),
         ExpressionKind::BoolExpr(node) => walk_bool_expr(node, ctx),
-        ExpressionKind::Reference(node) => format!("&{}", walk_expression(*node, ctx)),
+        ExpressionKind::Reference(node) => format!("(void*)&{}", walk_expression(*node, ctx)),
         ExpressionKind::Deref(node) => format!("*{}", walk_expression(*node, ctx)),
         ExpressionKind::FuncDef(node) => {
             walk_func_def(node, ctx);
@@ -289,45 +289,45 @@ fn walk_return_expr(ret: ReturnExprNode, ctx: &mut Context) -> String {
 }
 
 fn walk_bool_expr(node: BoolExprNode, ctx: &mut Context) -> String {
-    let mut left_code = walk_add_expr(node.left, ctx);
+    let mut lhs_code = walk_add_expr(node.lhs, ctx);
 
     for addent in node.comparison {
-        left_code += match addent.operator {
-            BoolOp::Equal => format!("=={}", walk_add_expr(addent.right, ctx)),
-            BoolOp::LessThan => format!("<{}", walk_add_expr(addent.right, ctx)),
+        lhs_code += match addent.operator {
+            BoolOp::Equal => format!("=={}", walk_add_expr(addent.rhs, ctx)),
+            BoolOp::LessThan => format!("<{}", walk_add_expr(addent.rhs, ctx)),
         }
         .as_str();
     }
 
-    left_code
+    lhs_code
 }
 
 fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
-    let mut left_code = walk_mul_expr(add.left, ctx);
+    let mut lhs_code = walk_mul_expr(add.left, ctx);
 
     for addent in add.addent {
-        left_code += match addent.op {
+        lhs_code += match addent.op {
             AddOp::Add => format!("+{}", walk_mul_expr(addent.value, ctx)),
             AddOp::Subtract => format!("-{}", walk_mul_expr(addent.value, ctx)),
         }
         .as_str();
     }
 
-    left_code
+    lhs_code
 }
 
 fn walk_mul_expr(mul: MulExprNode, ctx: &mut Context) -> String {
-    let mut left_code = walk_primary(mul.left, ctx);
+    let mut lhs_code = walk_primary(mul.left, ctx);
 
     for factor in mul.factor {
-        left_code += match factor.op {
+        lhs_code += match factor.op {
             MulOp::Multiply => format!("*{}", walk_primary(factor.value, ctx)),
             MulOp::Divide => format!("/{}", walk_primary(factor.value, ctx)),
         }
         .as_str()
     }
 
-    left_code
+    lhs_code
 }
 
 fn walk_primary(primary: PrimaryNode, ctx: &mut Context) -> String {

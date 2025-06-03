@@ -1,5 +1,4 @@
-use super::expression::Indent;
-use super::expression::IndentDisplay;
+use super::indent::{Indent, IndentDisplay};
 use std::fmt::{Debug, Formatter, Result};
 
 #[derive(Debug, Clone)]

@@ -1,4 +1,7 @@
-use super::expression::{ExpressionNode, Indent, IndentDisplay};
+use super::{
+    expression::ExpressionNode,
+    indent::{Indent, IndentDisplay},
+};
 use std::fmt::{Debug, Formatter, Result};
 
 #[derive(Debug, Clone)]

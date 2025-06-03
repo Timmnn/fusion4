@@ -2,37 +2,13 @@ use super::{
     block::BlockNode,
     func_call::FuncCallNode,
     func_def::FuncDefNode,
+    indent::{Indent, IndentDisplay},
     struct_def::{StructDefNode, StructFieldAccessNode},
     term::{StructInitNode, VarDeclNode},
     var_access::VarAccessNode,
 };
 use colored::Colorize;
 use std::fmt::{Debug, Display, Formatter, Result};
-
-// Define a constant for indentation increment
-// Use a dedicated struct to track indentation level
-#[derive(Debug, Clone, Copy)]
-pub struct Indent(pub usize);
-
-impl Indent {
-    pub fn new() -> Self {
-        Indent(0)
-    }
-
-    pub fn increment(&self, increment: usize) -> Self {
-        Indent(self.0 + increment)
-    }
-
-    // Helper to get indent as string
-    pub fn as_str(&self) -> String {
-        "| ".repeat(self.0)
-    }
-}
-
-// Helper trait to display AST nodes with indentation
-pub trait IndentDisplay {
-    fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result;
-}
 
 #[derive(Debug, Clone)]
 pub struct ExpressionNode {
@@ -60,7 +36,7 @@ impl Display for ExpressionNode {
 #[derive(Debug, Clone)]
 pub enum ExpressionKind {
     VarDecl(VarDeclNode),
-    AddExpr(AddExprNode),
+    //AddExpr(AddExprNode),
     FuncDef(FuncDefNode),
     ReturnExpr(ReturnExprNode),
     CImport(CImportNode),
@@ -85,7 +61,8 @@ pub struct IfStatNode {
 
 impl IndentDisplay for IfStatNode {
     fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
-        let _ = write!(f, "{}{}", indent.as_str(), "");
+        let _ = writeln!(f, "{}", indent.as_str());
+        let _ = write!(f, "{}", indent.as_str());
 
         Ok(())
     }
@@ -154,12 +131,14 @@ impl IndentDisplay for ReturnExprNode {
 impl IndentDisplay for ExpressionKind {
     fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
         let string = match self {
-            ExpressionKind::AddExpr(_) => "AddExpr".on_truecolor(100, 149, 237).black(),
+            //ExpressionKind::AddExpr(_) => "AddExpr".on_truecolor(100, 149, 237).black(),
             ExpressionKind::BoolExpr(_) => "BoolExpr".on_truecolor(100, 149, 237).black(),
             ExpressionKind::VarDecl(_) => "VarDecl".on_truecolor(100, 150, 200).black(),
             ExpressionKind::FuncDef(_) => "FuncDef".on_truecolor(10, 150, 200).black(),
             ExpressionKind::ReturnExpr(_) => "ReturnExpr".on_truecolor(50, 150, 200).black(),
             ExpressionKind::WhileLoop(_) => "WhileLoop".on_truecolor(50, 150, 200).black(),
+            ExpressionKind::Reference(_) => "Reference".on_truecolor(50, 150, 200).black(),
+            ExpressionKind::Deref(_) => "Deref".on_truecolor(50, 150, 200).black(),
             ExpressionKind::IfStat(_) => "IfStat".on_truecolor(50, 150, 200).black(),
             ExpressionKind::CImport(node) => format!("CImport({})", node.module)
                 .on_truecolor(50, 150, 200)
@@ -173,11 +152,16 @@ impl IndentDisplay for ExpressionKind {
                 "StructFieldAccess()".on_truecolor(5, 78, 155).black()
             }
         };
+
+        let indent = indent.increment(1);
+
         writeln!(f, "{}{}", indent.as_str(), string)?;
 
         match self {
-            ExpressionKind::AddExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
+            //ExpressionKind::AddExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::BoolExpr(node) => node.fmt_with_indent(f, indent.increment(1)),
+            ExpressionKind::Reference(node) => node.fmt_with_indent(f, indent.increment(1)),
+            ExpressionKind::Deref(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::VarDecl(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::FuncDef(node) => node.fmt_with_indent(f, indent.increment(1)),
             ExpressionKind::WhileLoop(node) => node.fmt_with_indent(f, indent.increment(1)),
@@ -206,7 +190,7 @@ impl IndentDisplay for ExpressionKind {
 
 #[derive(Debug, Clone)]
 pub struct BoolExprNode {
-    pub left: AddExprNode,
+    pub lhs: AddExprNode,
     pub comparison: Vec<BoolExprPart>,
 }
 
@@ -217,9 +201,9 @@ impl IndentDisplay for BoolExprNode {
             f,
             "{}{}:",
             indent.as_str(),
-            "Left".black().on_truecolor(200, 177, 54)
+            "LHS".black().on_truecolor(200, 177, 54)
         )?;
-        self.left.fmt_with_indent(f, indent.increment(1))?;
+        self.lhs.fmt_with_indent(f, indent.increment(1))?;
 
         // Display addents if any
         if !self.comparison.is_empty() {
@@ -227,7 +211,7 @@ impl IndentDisplay for BoolExprNode {
                 f,
                 "{}{}",
                 indent.as_str(),
-                "Addents".on_truecolor(128, 180, 12).black(),
+                "RHS".on_truecolor(128, 180, 12).black(),
             )?;
             let inner_indent = indent.increment(1);
             for (i, part) in self.comparison.iter().enumerate() {
@@ -243,7 +227,7 @@ impl IndentDisplay for BoolExprNode {
 #[derive(Debug, Clone)]
 pub struct BoolExprPart {
     pub operator: BoolOp,
-    pub right: AddExprNode,
+    pub rhs: AddExprNode,
 }
 
 impl Display for BoolOp {
@@ -271,13 +255,13 @@ impl IndentDisplay for BoolExprPart {
             self.operator
         )?;
         writeln!(f, "{}Value:", indent.as_str())?;
-        self.right.fmt_with_indent(f, indent.increment(1))
+        self.rhs.fmt_with_indent(f, indent.increment(1))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct AddExprNode {
-    pub left: MulExprNode,
+    pub lhs: MulExprNode,
     pub addent: Vec<AddExprPart>,
 }
 
@@ -288,7 +272,7 @@ impl IndentDisplay for AddExprNode {
             f,
             "{}{}:",
             indent.as_str(),
-            "Left".black().on_truecolor(200, 177, 54)
+            "LHS".black().on_truecolor(200, 177, 54)
         )?;
         self.left.fmt_with_indent(f, indent.increment(1))?;
 
@@ -298,7 +282,7 @@ impl IndentDisplay for AddExprNode {
                 f,
                 "{}{}",
                 indent.as_str(),
-                "Addents".on_truecolor(128, 180, 12).black(),
+                "RHS".on_truecolor(128, 180, 12).black(),
             )?;
             let inner_indent = indent.increment(1);
             for (i, part) in self.addent.iter().enumerate() {
@@ -371,9 +355,9 @@ impl IndentDisplay for MulExprNode {
             f,
             "{}{}:",
             inner_indent.as_str(),
-            "Left".black().on_truecolor(200, 177, 54)
+            "LHS".black().on_truecolor(200, 177, 54)
         )?;
-        self.left.fmt_with_indent(f, inner_indent.increment(1))?;
+        self.lhs.fmt_with_indent(f, inner_indent.increment(1))?;
 
         if !self.factor.is_empty() {
             writeln!(f, "{}Factors:", inner_indent.as_str())?;

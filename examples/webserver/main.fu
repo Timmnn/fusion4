@@ -1,4 +1,4 @@
-_c_import "<arpa/inet.h>" (sockaddr_in:struct INADDR_ANY:function)
+_c_import "<arpa/inet.h>" (sockaddr_in:struct htons:function)
 _c_import "<sys/socket.h>" (socklen_t:type socket:function bind:function listen:function accept:function setsockopt:function write:function read:function SOL_SOCKET:function SO_REUSEADDR:function AF_INET:function SOCK_STREAM:function)
 _c_import "<stdio.h>" (perror:function printf:function)
 _c_import "<stdlib.h>" (exit:function EXIT_FAILURE:function)
@@ -54,11 +54,11 @@ while 1 {
         // let buffer = array of char with BUFFER_SIZE
         //let _ = read(new_socket, buffer, BUFFER_SIZE)
 
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!" as *char
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!" as string 
         let x = write(new_socket, response, strlen(response)) as int
 
-        let x = close(new_socket) as int
+        let x1 = close(new_socket) as int
     }
 
-    let x = close(server_fd) as int
+    let x2 = close(server_fd) as int
 }
