@@ -77,7 +77,6 @@ pub struct WhileLoopNode {
 impl IndentDisplay for WhileLoopNode {
     fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent: Indent) -> Result {
         let _ = write!(f, "{}{}", indent.as_str(), "");
-
         Ok(())
     }
 }
@@ -274,7 +273,7 @@ impl IndentDisplay for AddExprNode {
             indent.as_str(),
             "LHS".black().on_truecolor(200, 177, 54)
         )?;
-        self.left.fmt_with_indent(f, indent.increment(1))?;
+        self.lhs.fmt_with_indent(f, indent.increment(1))?;
 
         // Display addents if any
         if !self.addent.is_empty() {
@@ -337,8 +336,8 @@ impl IndentDisplay for AddExprPart {
 
 #[derive(Debug, Clone)]
 pub struct MulExprNode {
-    pub left: PrimaryNode,
-    pub factor: Vec<MulExprPart>,
+    pub lhs: PrimaryNode,
+    pub rhs: Vec<MulExprPart>,
 }
 
 impl IndentDisplay for MulExprNode {
@@ -359,10 +358,10 @@ impl IndentDisplay for MulExprNode {
         )?;
         self.lhs.fmt_with_indent(f, inner_indent.increment(1))?;
 
-        if !self.factor.is_empty() {
+        if !self.rhs.is_empty() {
             writeln!(f, "{}Factors:", inner_indent.as_str())?;
             let factors_indent = inner_indent.increment(1);
-            for (i, factor) in self.factor.iter().enumerate() {
+            for (i, factor) in self.rhs.iter().enumerate() {
                 writeln!(f, "{}[{}]:", factors_indent.as_str(), i)?;
                 factor.fmt_with_indent(f, factors_indent.increment(1))?;
             }

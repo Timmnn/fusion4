@@ -1,7 +1,4 @@
-use std::{collections::HashMap, fs};
-
-use pest::Parser;
-
+mod context;
 use crate::{
     ast_builder::build_ast_from_pairs,
     ast_nodes::{
@@ -19,64 +16,12 @@ use crate::{
     },
     parser::{FusionParser, Rule},
 };
-
-struct GenericFuncDeclaration {
-    node: FuncDefNode,
-    generic_params: Vec<String>,
-}
-
-#[derive(Debug)]
-struct FuncDeclaration {
-    pub compiler_name: String,
-    pub code: String,
-}
-
-struct Context {
-    pub scope_stack: Vec<String>,
-    pub function_declarations: HashMap<String, FuncDeclaration>,
-    pub generic_function_declarations: HashMap<String, GenericFuncDeclaration>,
-    pub main_function_content: String,
-    pub struct_definitions: Vec<String>,
-    pub imports: Vec<String>,
-    pub generic_function_implementations: HashMap<Vec<String>, String>,
-    pub compiler_prefix: String,
-    pub modules: HashMap<String, Context>,
-    pub global_variables: Vec<String>,
-}
-
-impl Context {
-    pub fn new(prefix: String) -> Self {
-        Self {
-            scope_stack: vec!["Global".to_string()],
-            function_declarations: HashMap::new(),
-            struct_definitions: vec![],
-            generic_function_declarations: HashMap::new(),
-            generic_function_implementations: HashMap::new(),
-            main_function_content: String::from(""),
-            imports: vec![],
-            compiler_prefix: prefix,
-            modules: HashMap::new(),
-            global_variables: vec![],
-        }
-    }
-}
-
-impl Default for Context {
-    fn default() -> Self {
-        Self {
-            scope_stack: vec!["Global".to_string()],
-            function_declarations: HashMap::new(),
-            struct_definitions: vec![],
-            generic_function_declarations: HashMap::new(),
-            generic_function_implementations: HashMap::new(),
-            main_function_content: String::from(""),
-            imports: vec![],
-            compiler_prefix: "".to_string(),
-            modules: HashMap::new(),
-            global_variables: vec![],
-        }
-    }
-}
+use context::{
+    CImportedFunctionDeclaration, Context, FunctionDeclaration, RegularFunctionDeclaration,
+    StructDefinition,
+};
+use pest::Parser;
+use std::fs;
 
 pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
     let mut ctx = Context::new(compiler_prefix);
@@ -93,7 +38,12 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
                 "{};",
                 ctx.function_declarations
                     .values()
-                    .map(|f| f.code.clone())
+                    .map(|f| {
+                        match f {
+                            FunctionDeclaration::Regular(decl) => decl.c_code.clone(),
+                            _ => "".to_string(),
+                        }
+                    })
                     .collect::<Vec<String>>()
                     .join(";")
             )
@@ -103,7 +53,11 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
 
     format!(
         "{}{}{}{}{}{}{}",
-        ctx.imports.join(";"),
+        ctx.imports
+            .into_iter()
+            .map(|i| i + "\n")
+            .collect::<Vec<_>>()
+            .join(""),
         default_type_defs.join(""),
         ctx.global_variables
             .iter()
@@ -111,7 +65,11 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
             .collect::<Vec<_>>()
             .join(""),
         modules_code,
-        ctx.struct_definitions.join(""),
+        ctx.struct_definitions
+            .into_iter()
+            .map(|s| s.c_code)
+            .collect::<Vec<_>>()
+            .join(""),
         /*ctx.function_declarations
         .values()
         .map(|f| f.code.clone())
@@ -210,12 +168,17 @@ fn walk_import(node: ImportNode, ctx: &mut Context) {
     for import in node.values {
         let imported = module_ctx.function_declarations.get(&import).unwrap();
 
+        let imported = match imported {
+            FunctionDeclaration::CImported(x) => x,
+            _ => unreachable!(),
+        };
+
         ctx.function_declarations.insert(
             import,
-            FuncDeclaration {
-                compiler_name: imported.compiler_name.clone(),
-                code: imported.code.clone(),
-            },
+            FunctionDeclaration::Regular(RegularFunctionDeclaration {
+                compiler_name: imported.name.clone(),
+                c_code: "".to_string(),
+            }),
         );
     }
 
@@ -240,17 +203,24 @@ fn walk_struct_field_access(node: StructFieldAccessNode, _ctx: &mut Context) -> 
 }
 
 fn walk_struct_def(node: StructDefNode, ctx: &mut Context) {
-    ctx.struct_definitions.push(format!(
+    let c_code = format!(
         "struct {prefix}{name} {{ {fields} }}; typedef struct {prefix}{name} {name};",
         prefix = ctx.compiler_prefix,
         fields = node
             .fields
+            .clone()
             .into_iter()
             .map(|field| format!("{} {};", field.type_name, field.name))
             .collect::<Vec<String>>()
             .join(""),
         name = node.name,
-    ));
+    );
+
+    ctx.struct_definitions.push(StructDefinition {
+        name: node.name,
+        c_code,
+        fields: node.fields.into_iter().map(|f| f.name).collect::<Vec<_>>(),
+    });
 }
 
 fn walk_str_lit(str: String, _ctx: &mut Context) -> String {
@@ -259,21 +229,22 @@ fn walk_str_lit(str: String, _ctx: &mut Context) -> String {
 
 fn walk_c_import(node: CImportNode, ctx: &mut Context) {
     ctx.imports
-        .push(format!("#include {}\n", node.module.as_str()));
+        .push(format!("#include {}", node.module.as_str()));
 
     for value in node.values {
         match value.1 {
-            CImportValueType::Struct => ctx
-                .struct_definitions
-                .push(create_struct_alias(value.0, ctx)),
+            CImportValueType::Struct => {
+                ctx.struct_definitions.push(StructDefinition {
+                    name: value.0.clone(),
+                    c_code: create_struct_alias(value.0, ctx),
+                    fields: vec![],
+                });
+            }
             CImportValueType::Type => {}
             CImportValueType::Function => {
                 ctx.function_declarations.insert(
                     value.0.clone(),
-                    FuncDeclaration {
-                        compiler_name: value.0,
-                        code: "".to_string(),
-                    },
+                    FunctionDeclaration::CImported(CImportedFunctionDeclaration { name: value.0 }),
                 );
             }
         }
@@ -303,7 +274,7 @@ fn walk_bool_expr(node: BoolExprNode, ctx: &mut Context) -> String {
 }
 
 fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
-    let mut lhs_code = walk_mul_expr(add.left, ctx);
+    let mut lhs_code = walk_mul_expr(add.lhs, ctx);
 
     for addent in add.addent {
         lhs_code += match addent.op {
@@ -317,9 +288,9 @@ fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
 }
 
 fn walk_mul_expr(mul: MulExprNode, ctx: &mut Context) -> String {
-    let mut lhs_code = walk_primary(mul.left, ctx);
+    let mut lhs_code = walk_primary(mul.lhs, ctx);
 
-    for factor in mul.factor {
+    for factor in mul.rhs {
         lhs_code += match factor.op {
             MulOp::Multiply => format!("*{}", walk_primary(factor.value, ctx)),
             MulOp::Divide => format!("/{}", walk_primary(factor.value, ctx)),
@@ -364,56 +335,51 @@ fn walk_func_call(func_call: FuncCallNode, ctx: &mut Context) -> String {
         .collect::<Vec<String>>()
         .join(", ");
 
-    let mut compiler_name = ctx
-        .function_declarations
-        .get(&func_call.name)
-        .unwrap()
-        .compiler_name
-        .clone();
+    let code = match ctx.function_declarations.get(&func_call.name).unwrap() {
+        FunctionDeclaration::Generic(f) => {
+            let node = f.ast_node.clone();
 
-    if let Some(generic_func) = ctx.generic_function_declarations.get(&func_call.name) {
-        let node = generic_func.node.clone();
-
-        let params = func_call
-            .generic_params
-            .iter()
-            .enumerate()
-            .map(|(i, p)| FuncParam {
-                name: generic_func.node.params[i].name.clone(),
-                param_type: p.clone(),
-            })
-            .collect::<Vec<_>>();
-
-        let return_type = if let Some(return_type) = node.return_type {
-            if let Some(pos) = generic_func
+            let params = func_call
                 .generic_params
                 .iter()
-                .position(|x| *x == return_type)
-            {
-                func_call.generic_params[pos].clone()
+                .enumerate()
+                .map(|(i, p)| FuncParam {
+                    name: node.params[i].name.clone(),
+                    param_type: p.clone(),
+                })
+                .collect::<Vec<_>>();
+
+            let return_type = if let Some(return_type) = node.return_type {
+                if let Some(pos) = f.generic_params.iter().position(|x| *x == return_type) {
+                    func_call.generic_params[pos].clone()
+                } else {
+                    return_type
+                }
             } else {
-                return_type
-            }
-        } else {
-            // Handle the case where return_type is None
-            panic!("No return type specified") // or return a default/error
-        };
+                // Handle the case where return_type is None
+                panic!("No return type specified") // or return a default/error
+            };
 
-        compiler_name = format!("{}_{}", compiler_name, func_call.generic_params.join("_"));
+            let compiler_name = format!("{}_{}", "todo", func_call.generic_params.join("_"));
 
-        walk_func_def(
-            FuncDefNode {
-                name: compiler_name.clone(),
-                params,
-                body: node.body,
-                return_type: Some(return_type),
-                generic_typing: None,
-            },
-            ctx,
-        );
-    }
+            walk_func_def(
+                FuncDefNode {
+                    name: compiler_name.clone(),
+                    params,
+                    body: node.body,
+                    return_type: Some(return_type),
+                    generic_typing: None,
+                },
+                ctx,
+            );
 
-    format!("{}({})", compiler_name, params_code)
+            "".to_string()
+        }
+        FunctionDeclaration::Regular(f) => format!("{}({})", f.compiler_name, params_code),
+        FunctionDeclaration::CImported(f) => format!("{}({})", f.name, params_code),
+    };
+
+    code
 }
 
 fn walk_block(block: BlockNode, ctx: &mut Context) -> String {
@@ -439,36 +405,51 @@ fn walk_func_def(node: FuncDefNode, ctx: &mut Context) {
             None => "void".to_string(),
         },
         name,
-        walk_func_def_params(node.clone().params, ctx),
+        walk_func_def_params(node.clone().params, ctx).c_code,
         walk_block(node.clone().body, ctx)
     )
     .to_string();
 
     if let Some(generic_typing) = node.clone().generic_typing {
-        ctx.generic_function_declarations.insert(
+        ctx.function_declarations.insert(
             node.clone().name,
-            GenericFuncDeclaration {
-                node,
+            FunctionDeclaration::Generic(context::GenericFunctionDeclaration {
+                ast_node: node,
                 generic_params: generic_typing.types,
-            },
+            }),
         );
         return;
     }
 
     ctx.function_declarations.insert(
         node.name,
-        FuncDeclaration {
+        FunctionDeclaration::Regular(RegularFunctionDeclaration {
             compiler_name: name.clone(),
-            code: code.clone(),
-        },
+            c_code: code.clone(),
+        }),
     );
 }
 
-fn walk_func_def_params(params: Vec<FuncParam>, _ctx: &mut Context) -> String {
-    let x = params
-        .into_iter()
-        .map(|param| format!("{} {}", param.param_type, param.name))
-        .collect::<Vec<String>>();
+struct WalkFuncDefParamsResult {
+    pub c_code: String,
+    /// (name, type)
+    pub params: Vec<(String, String)>,
+}
 
-    x.join(", ")
+fn walk_func_def_params(params: Vec<FuncParam>, _ctx: &mut Context) -> WalkFuncDefParamsResult {
+    let mut parsed_params = vec![];
+    let c_code = params
+        .into_iter()
+        .map(|param| {
+            parsed_params.push((param.name.clone(), param.param_type.clone()));
+
+            format!("{} {}", param.param_type, param.name)
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    WalkFuncDefParamsResult {
+        c_code,
+        params: parsed_params,
+    }
 }

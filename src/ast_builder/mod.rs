@@ -208,7 +208,7 @@ fn build_add_expr(pair: Pair) -> AddExprNode {
     let mut inner = pair.into_inner();
 
     let left_pair = inner.next().unwrap();
-    let left = build_mul_expr(left_pair);
+    let lhs = build_mul_expr(left_pair);
 
     let mut addent = vec![];
     while inner.len() > 0 {
@@ -225,16 +225,16 @@ fn build_add_expr(pair: Pair) -> AddExprNode {
         addent.push(AddExprPart { op, value });
     }
 
-    AddExprNode { left, addent }
+    AddExprNode { lhs, addent }
 }
 
 fn build_mul_expr(pair: Pair) -> MulExprNode {
     let mut inner = pair.into_inner();
 
     let primary_pair = inner.next().unwrap();
-    let left = build_primary(primary_pair);
+    let lhs = build_primary(primary_pair);
 
-    let mut factor = vec![];
+    let mut rhs = vec![];
     while inner.len() > 0 {
         let op_pair = inner.next().unwrap();
 
@@ -246,10 +246,10 @@ fn build_mul_expr(pair: Pair) -> MulExprNode {
 
         let value = build_primary(inner.next().unwrap());
 
-        factor.push(MulExprPart { op, value });
+        rhs.push(MulExprPart { op, value });
     }
 
-    MulExprNode { left, factor }
+    MulExprNode { lhs, rhs }
 }
 
 fn build_primary(pair: Pair) -> PrimaryNode {
