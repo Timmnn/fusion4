@@ -108,7 +108,7 @@ fn build_import(pair: Pair) -> ImportNode {
 
     ImportNode {
         values,
-        module: name.unwrap(),
+        module: name.unwrap().replace("\"", ""),
     }
 }
 

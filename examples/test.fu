@@ -1,4 +1,4 @@
-import {add, sub} from "/home/timm/Dev/fusion3/examples/std/math.fu"
+import {add, sub} from "std/math.fu"
 
 add<int>(1, 5)
 sub<int>(1, 5)

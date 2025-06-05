@@ -21,10 +21,10 @@ use context::{
     RegularFunctionDeclaration, StructDefinition,
 };
 use pest::Parser;
-use std::{fmt::format, fs};
+use std::{fs, path::PathBuf};
 
-pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
-    let mut ctx = Context::new(compiler_prefix);
+pub fn gen_code(program: ProgramNode, compiler_prefix: String, path: String) -> String {
+    let mut ctx = Context::new(compiler_prefix, path);
     walk_program(program, &mut ctx);
     let main_function = format!("int main(){{{}return 0;}}", ctx.main_function_content);
 
@@ -202,9 +202,16 @@ fn walk_while_loop(node: WhileLoopNode, ctx: &mut Context) -> String {
 fn walk_import(node: ImportNode, ctx: &mut Context) {
     let module_name = node.module.split("/").last().unwrap().replace(".fu\"", "");
 
-    let mut module_ctx = Context::new(format!("{}_{}", module_name, ctx.compiler_prefix));
+    let mut path = PathBuf::from(ctx.path.clone());
+    path.pop(); //Remove file name
+    path.push(node.module.clone());
 
-    let path = node.module.replace("\"", "");
+    let mut module_ctx = Context::new(
+        format!("{}_{}", module_name, ctx.compiler_prefix),
+        path.display().to_string(),
+    );
+
+    println!("{}", path.display());
 
     let contents = fs::read_to_string(path).expect("Should have been able to read the file");
 
@@ -476,7 +483,10 @@ fn create_generic_function_instance(
     }
 
     // Create a specialized context for this generic instance
-    let mut specialized_ctx = Context::new(format!("{}_{}", ctx.compiler_prefix, compiler_name));
+    let mut specialized_ctx = Context::new(
+        format!("{}_{}", ctx.compiler_prefix, compiler_name),
+        ctx.path.clone(),
+    );
 
     // Add the type substitutions to the specialized context
     // You'll need to modify your Context struct to support type substitutions

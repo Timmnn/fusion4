@@ -52,10 +52,12 @@ pub struct Context {
     pub modules: HashMap<String, Context>,
     pub global_variables: Vec<String>,
     pub type_substitutions: std::collections::HashMap<String, String>,
+    // Path of the file being compiled
+    pub path: String,
 }
 
 impl Context {
-    pub fn new(prefix: String) -> Self {
+    pub fn new(prefix: String, path: String) -> Self {
         Self {
             scope_stack: vec!["Global".to_string()],
             function_declarations: HashMap::new(),
@@ -68,24 +70,7 @@ impl Context {
             modules: HashMap::new(),
             global_variables: vec![],
             type_substitutions: std::collections::HashMap::new(),
-        }
-    }
-}
-
-impl Default for Context {
-    fn default() -> Self {
-        Self {
-            scope_stack: vec!["Global".to_string()],
-            function_declarations: HashMap::new(),
-            struct_definitions: vec![],
-            generic_function_implementations: HashMap::new(),
-            main_function_content: String::from(""),
-            imports: vec![],
-            types: vec![],
-            compiler_prefix: "".to_string(),
-            modules: HashMap::new(),
-            global_variables: vec![],
-            type_substitutions: std::collections::HashMap::new(),
+            path,
         }
     }
 }

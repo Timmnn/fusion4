@@ -50,7 +50,7 @@ fn main() {
 
     println!("{}{}", "AST:\n".purple(), ast);
 
-    let code = gen_code(ast, "$_".to_string());
+    let code = gen_code(ast, "$_".to_string(), file_path.display().to_string());
 
     println!(
         "\n\n{}\n--------------------\n{}\n--------------------\n\n",
