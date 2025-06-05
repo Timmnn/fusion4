@@ -1,3 +1,4 @@
-2 + 2 * 78
+import {add, sub} from "/home/timm/Dev/fusion3/examples/std/math.fu"
 
-let x = 5.5
+add<int>(1, 5)
+sub<int>(1, 5)

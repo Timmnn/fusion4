@@ -27,7 +27,7 @@ while 1 {
         sin_addr: in_addr {
             s_addr: INADDR_ANY
         }
-    } as sockaddr_in
+    } 
 
     bind_result := bind(server_fd, &server_addr, 16) as int
 
@@ -45,7 +45,7 @@ while 1 {
     printf("Server listening on port %d...\n", PORT)
 
     while 1 {
-        client_addr := sockaddr_in {} as sockaddr_in
+        client_addr := sockaddr_in {}
         client_len := 16 as socklen_t
 
         new_socket := accept(server_fd, &client_addr, &client_len) as int
@@ -53,9 +53,6 @@ while 1 {
             perror("Accept failed")
             continue
         }
-
-        // let buffer = array of char with BUFFER_SIZE
-        //let _ = read(new_socket, buffer, BUFFER_SIZE)
 
         response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!" as string 
         write(new_socket, response, strlen(response))

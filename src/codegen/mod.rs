@@ -17,11 +17,11 @@ use crate::{
     parser::{FusionParser, Rule},
 };
 use context::{
-    CImportedFunctionDeclaration, Context, FunctionDeclaration, RegularFunctionDeclaration,
-    StructDefinition,
+    CImportedFunctionDeclaration, Context, FunctionDeclaration, GenericFunctionDeclaration,
+    RegularFunctionDeclaration, StructDefinition,
 };
 use pest::Parser;
-use std::fs;
+use std::{fmt::format, fs};
 
 pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
     let mut ctx = Context::new(compiler_prefix);
@@ -51,8 +51,10 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
         .collect::<Vec<String>>()
         .join(";");
 
+    println!("{:?}", ctx.function_declarations.keys());
+
     format!(
-        "{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}",
         ctx.imports
             .into_iter()
             .map(|i| i + "\n")
@@ -70,15 +72,18 @@ pub fn gen_code(program: ProgramNode, compiler_prefix: String) -> String {
             .map(|s| s.c_code)
             .collect::<Vec<_>>()
             .join(""),
-        /*ctx.function_declarations
-        .values()
-        .map(|f| f.code.clone())
-        .collect::<Vec<String>>()
-        .join(";"),*/
         ctx.generic_function_implementations
-            .values()
-            .cloned()
+            .iter()
+            .map(|f| f.1.clone())
             .collect::<Vec<_>>()
+            .join(""),
+        ctx.function_declarations
+            .into_values()
+            .map(|f| match f {
+                FunctionDeclaration::Regular(f) => f.c_code,
+                _ => "".to_string(),
+            })
+            .collect::<Vec<String>>()
             .join(";"),
         main_function
     )
@@ -114,7 +119,7 @@ fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> TypedExpression {
             }
         }
         ExpressionKind::FuncDef(node) => {
-            walk_func_def(node, ctx);
+            walk_func_def(node, ctx, false);
 
             TypedExpression {
                 c_code: "".to_string(),
@@ -217,21 +222,11 @@ fn walk_import(node: ImportNode, ctx: &mut Context) {
 
     walk_program(ast, &mut module_ctx);
 
-    for import in node.values {
-        let imported = module_ctx.function_declarations.get(&import).unwrap();
-
-        let imported = match imported {
-            FunctionDeclaration::CImported(x) => x,
-            _ => unreachable!(),
-        };
-
-        ctx.function_declarations.insert(
-            import,
-            FunctionDeclaration::Regular(RegularFunctionDeclaration {
-                compiler_name: imported.name.clone(),
-                c_code: "".to_string(),
-            }),
-        );
+    for import in node.values.clone() {
+        if let Some(function_decl) = module_ctx.function_declarations.get(&import) {
+            ctx.function_declarations
+                .insert(import.clone(), function_decl.clone());
+        }
     }
 
     ctx.modules.insert(node.module, module_ctx);
@@ -405,7 +400,7 @@ fn walk_primary(primary: PrimaryNode, ctx: &mut Context) -> TypedExpression {
         },
 
         PrimaryKind::StructInit(node) => TypedExpression {
-            expr_type: "todo".to_string(),
+            expr_type: node.name.clone(),
             c_code: walk_struct_init(node, ctx),
         },
 
@@ -445,49 +440,136 @@ fn walk_func_call(func_call: FuncCallNode, ctx: &mut Context) -> String {
 
     let code = match ctx.function_declarations.get(&func_call.name).unwrap() {
         FunctionDeclaration::Generic(f) => {
-            let node = f.ast_node.clone();
+            let compiler_name = create_generic_function_instance(f.clone(), func_call, ctx);
 
-            let params = func_call
-                .generic_params
-                .iter()
-                .enumerate()
-                .map(|(i, p)| FuncParam {
-                    name: node.params[i].name.clone(),
-                    param_type: p.clone(),
-                })
-                .collect::<Vec<_>>();
-
-            let return_type = if let Some(return_type) = node.return_type {
-                if let Some(pos) = f.generic_params.iter().position(|x| *x == return_type) {
-                    func_call.generic_params[pos].clone()
-                } else {
-                    return_type
-                }
-            } else {
-                // Handle the case where return_type is None
-                panic!("No return type specified") // or return a default/error
-            };
-
-            let compiler_name = format!("{}_{}", "todo", func_call.generic_params.join("_"));
-
-            walk_func_def(
-                FuncDefNode {
-                    name: compiler_name.clone(),
-                    params,
-                    body: node.body,
-                    return_type: Some(return_type),
-                    generic_typing: None,
-                },
-                ctx,
-            );
-
-            "".to_string()
+            format!("{}({})", compiler_name, params_code)
         }
         FunctionDeclaration::Regular(f) => format!("{}({})", f.compiler_name, params_code),
         FunctionDeclaration::CImported(f) => format!("{}({})", f.name, params_code),
     };
 
     code
+}
+
+fn create_generic_function_instance(
+    function: GenericFunctionDeclaration,
+    call: FuncCallNode,
+    ctx: &mut Context,
+) -> String {
+    let node = function.ast_node.clone();
+    let compiler_name = format!("{}_{}", call.name, call.generic_params.join("_"));
+
+    // Check if this generic instance was already generated
+    if ctx
+        .generic_function_implementations
+        .contains_key(&(call.name.clone(), call.generic_params.clone()))
+    {
+        return compiler_name;
+    }
+
+    // Create a mapping from generic type parameters to concrete types
+    let mut type_substitutions = std::collections::HashMap::new();
+    for (i, generic_param) in function.generic_params.iter().enumerate() {
+        if i < call.generic_params.len() {
+            type_substitutions.insert(generic_param.clone(), call.generic_params[i].clone());
+        }
+    }
+
+    // Create a specialized context for this generic instance
+    let mut specialized_ctx = Context::new(format!("{}_{}", ctx.compiler_prefix, compiler_name));
+
+    // Add the type substitutions to the specialized context
+    // You'll need to modify your Context struct to support type substitutions
+    specialized_ctx.type_substitutions = type_substitutions.clone();
+
+    // Substitute generic types in parameter types
+    let params_code = node
+        .params
+        .iter()
+        .map(|param| {
+            let param_type = type_substitutions
+                .get(&param.param_type)
+                .unwrap_or(&param.param_type)
+                .clone();
+            format!("{} {}", param_type, param.name)
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    // Substitute generic types in return type
+    let return_type = if let Some(return_type) = node.return_type {
+        type_substitutions
+            .get(&return_type)
+            .unwrap_or(&return_type)
+            .clone()
+    } else {
+        "void".to_string()
+    };
+
+    // Generate the function body with the specialized context
+    let body_code = walk_block_with_type_substitution(
+        node.body.clone(),
+        &mut specialized_ctx,
+        &type_substitutions,
+    );
+
+    let code = format!(
+        "{} {}({}) {{ {} }}",
+        return_type, compiler_name, params_code, body_code
+    );
+
+    println!("Generated generic function instance: {}", code);
+
+    let call = call.clone();
+
+    ctx.generic_function_implementations
+        .insert((call.name, call.generic_params.clone()), code);
+
+    compiler_name
+}
+
+// New helper function to walk expressions with type substitution
+fn walk_block_with_type_substitution(
+    block: BlockNode,
+    ctx: &mut Context,
+    type_substitutions: &std::collections::HashMap<String, String>,
+) -> String {
+    ctx.scope_stack.push("Block".to_string());
+    let results: Vec<String> = block
+        .expressions
+        .into_iter()
+        .map(|expr| {
+            walk_expression_with_type_substitution(expr, ctx, type_substitutions).c_code + ";\n"
+        })
+        .collect();
+
+    ctx.scope_stack.pop();
+    results.join("")
+}
+
+fn walk_expression_with_type_substitution(
+    expr: ExpressionNode,
+    ctx: &mut Context,
+    type_substitutions: &std::collections::HashMap<String, String>,
+) -> TypedExpression {
+    // This function should be similar to walk_expression but apply type substitutions
+    // For now, let's implement a basic version
+    match expr.kind {
+        ExpressionKind::VarDecl(mut node) => {
+            // Substitute generic types in variable declarations
+            if let Some(ref var_type) = node.var_type {
+                if let Some(concrete_type) = type_substitutions.get(var_type) {
+                    node.var_type = Some(concrete_type.clone());
+                }
+            }
+            TypedExpression {
+                c_code: walk_var_decl(node, ctx),
+                expr_type: "()".to_string(),
+            }
+        }
+        // Add other cases as needed, applying type substitutions where appropriate
+        _ => walk_expression(expr, ctx), // Fallback to regular walking
+    }
 }
 
 fn walk_block(block: BlockNode, ctx: &mut Context) -> String {
@@ -503,7 +585,7 @@ fn walk_block(block: BlockNode, ctx: &mut Context) -> String {
     results.join("")
 }
 
-fn walk_func_def(node: FuncDefNode, ctx: &mut Context) {
+fn walk_func_def(node: FuncDefNode, ctx: &mut Context, is_generic_impl: bool) {
     let name = format!("{}{}", ctx.compiler_prefix, node.name);
 
     let code = format!(
@@ -523,19 +605,23 @@ fn walk_func_def(node: FuncDefNode, ctx: &mut Context) {
             node.clone().name,
             FunctionDeclaration::Generic(context::GenericFunctionDeclaration {
                 ast_node: node,
+                body_c_code: code,
                 generic_params: generic_typing.types,
             }),
         );
         return;
     }
 
-    ctx.function_declarations.insert(
-        node.name,
-        FunctionDeclaration::Regular(RegularFunctionDeclaration {
-            compiler_name: name.clone(),
-            c_code: code.clone(),
-        }),
-    );
+    if is_generic_impl {
+    } else {
+        ctx.function_declarations.insert(
+            node.name,
+            FunctionDeclaration::Regular(RegularFunctionDeclaration {
+                compiler_name: name.clone(),
+                c_code: code.clone(),
+            }),
+        );
+    }
 }
 
 struct WalkFuncDefParamsResult {
