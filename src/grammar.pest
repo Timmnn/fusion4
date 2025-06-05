@@ -122,7 +122,7 @@ type_alias = { "type" ~ ident ~ "=" ~ ident }
     --------------------------------------------------
 */
 assignment = _{ ident ~ "=" ~ expression }
-var_decl   =  { "let" ~ ident ~ "=" ~ expression ~ "as" ~ ident }
+var_decl   =  {  ident ~ ":=" ~ expression ~ ("as" ~ ident)? }
 /*
     --------------------------------------------------
     C IMPORT

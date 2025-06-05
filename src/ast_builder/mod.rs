@@ -351,12 +351,15 @@ fn build_var_decl(pair: Pair) -> VarDeclNode {
 
     let ident = inner.next().unwrap().as_str().to_string();
     let expression = build_expression(inner.next().unwrap());
-    let var_type = inner.next().unwrap().as_str().to_string();
+    let var_type = match inner.next() {
+        Some(pair) => Some(pair.as_str().to_string()),
+        _ => None,
+    };
 
     VarDeclNode {
         name: ident,
         value: Box::new(expression),
-        var_type,
+        var_type: var_type,
     }
 }
 

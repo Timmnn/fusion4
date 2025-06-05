@@ -88,48 +88,100 @@ fn walk_program(program: ProgramNode, ctx: &mut Context) {
     for statement in &program.expressions {
         let code = walk_expression(statement.clone(), ctx);
 
-        ctx.main_function_content += (code.as_str().to_owned() + ";").as_str();
+        ctx.main_function_content += (code.c_code.as_str().to_owned() + ";").as_str();
     }
 }
 
-fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> String {
+struct TypedExpression {
+    pub expr_type: String,
+    pub c_code: String,
+}
+
+fn walk_expression(expr: ExpressionNode, ctx: &mut Context) -> TypedExpression {
     match expr.kind {
         //ExpressionKind::AddExpr(node) => walk_add_expr(node, ctx),
         ExpressionKind::BoolExpr(node) => walk_bool_expr(node, ctx),
-        ExpressionKind::Reference(node) => format!("(void*)&{}", walk_expression(*node, ctx)),
-        ExpressionKind::Deref(node) => format!("*{}", walk_expression(*node, ctx)),
+        ExpressionKind::Reference(node) => TypedExpression {
+            c_code: format!("(void*)&{}", walk_expression(*node, ctx).c_code),
+            expr_type: "void*".to_string(),
+        },
+        ExpressionKind::Deref(node) => {
+            let res = walk_expression(*node, ctx);
+
+            TypedExpression {
+                c_code: format!("*{}", res.c_code),
+                expr_type: res.expr_type,
+            }
+        }
         ExpressionKind::FuncDef(node) => {
             walk_func_def(node, ctx);
 
-            String::from("")
+            TypedExpression {
+                c_code: "".to_string(),
+                expr_type: "()".to_string(),
+            }
         }
-        ExpressionKind::ReturnExpr(node) => walk_return_expr(node, ctx),
+        ExpressionKind::ReturnExpr(node) => TypedExpression {
+            c_code: walk_return_expr(node, ctx),
+            expr_type: "()".to_string(),
+        },
         ExpressionKind::CImport(node) => {
             walk_c_import(node, ctx);
-            String::from("")
+            TypedExpression {
+                c_code: "".to_string(),
+                expr_type: "()".to_string(),
+            }
         }
-        ExpressionKind::WhileLoop(node) => walk_while_loop(node, ctx),
-        ExpressionKind::IfStat(node) => walk_if_stat(node, ctx),
+        ExpressionKind::WhileLoop(node) => TypedExpression {
+            c_code: walk_while_loop(node, ctx),
+            expr_type: "()".to_string(),
+        },
+        ExpressionKind::IfStat(node) => TypedExpression {
+            c_code: walk_if_stat(node, ctx),
+            expr_type: "()".to_string(),
+        },
         ExpressionKind::Import(node) => {
             walk_import(node, ctx);
-            String::from("")
+            TypedExpression {
+                c_code: "".to_string(),
+                expr_type: "()".to_string(),
+            }
         }
-        ExpressionKind::IntLit(val) => val.to_string(),
-        ExpressionKind::FuncCall(node) => walk_func_call(node, ctx),
-        ExpressionKind::StrLit(str) => walk_str_lit(str, ctx),
+        ExpressionKind::IntLit(val) => TypedExpression {
+            c_code: val.to_string(),
+            expr_type: "int".to_string(),
+        },
+        ExpressionKind::FuncCall(node) => TypedExpression {
+            c_code: walk_func_call(node, ctx),
+            expr_type: "todo".to_string(),
+        },
+        ExpressionKind::StrLit(str) => TypedExpression {
+            c_code: walk_str_lit(str, ctx),
+            expr_type: "string".to_string(),
+        },
         ExpressionKind::StructDef(node) => {
             walk_struct_def(node, ctx);
-            String::from("")
+
+            TypedExpression {
+                c_code: "".to_string(),
+                expr_type: "()".to_string(),
+            }
         }
-        ExpressionKind::StructFieldAccess(node) => walk_struct_field_access(node, ctx),
-        ExpressionKind::VarDecl(node) => walk_var_decl(node, ctx),
+        ExpressionKind::StructFieldAccess(node) => TypedExpression {
+            c_code: walk_struct_field_access(node, ctx),
+            expr_type: "todo".to_string(),
+        },
+        ExpressionKind::VarDecl(node) => TypedExpression {
+            c_code: walk_var_decl(node, ctx),
+            expr_type: "todo".to_string(),
+        },
     }
 }
 
 fn walk_if_stat(node: IfStatNode, ctx: &mut Context) -> String {
     format!(
         "if({}){{ {} }}",
-        walk_expression(*node.condition, ctx),
+        walk_expression(*node.condition, ctx).c_code,
         walk_block(node.block, ctx)
     )
 }
@@ -137,7 +189,7 @@ fn walk_if_stat(node: IfStatNode, ctx: &mut Context) -> String {
 fn walk_while_loop(node: WhileLoopNode, ctx: &mut Context) -> String {
     format!(
         "while({}){{ {} }}",
-        walk_expression(*node.condition, ctx),
+        walk_expression(*node.condition, ctx).c_code,
         walk_block(node.block, ctx)
     )
 }
@@ -186,9 +238,14 @@ fn walk_import(node: ImportNode, ctx: &mut Context) {
 }
 
 fn walk_var_decl(node: VarDeclNode, ctx: &mut Context) -> String {
-    let value = walk_expression(*node.value, ctx);
+    let expr_result = walk_expression(*node.value, ctx);
 
-    let code = format!("{} {} = {}", node.var_type, node.name, value);
+    let var_type = match node.var_type {
+        Some(t) => t,
+        None => expr_result.expr_type,
+    };
+
+    let code = format!("{} {} = {}", var_type, node.name, expr_result.c_code);
 
     if ctx.scope_stack.last().unwrap() == "Global" {
         ctx.global_variables.push(code);
@@ -256,60 +313,111 @@ fn create_struct_alias(name: String, _ctx: &Context) -> String {
 }
 
 fn walk_return_expr(ret: ReturnExprNode, ctx: &mut Context) -> String {
-    format!("return {};", walk_expression(*ret.expression, ctx))
+    format!("return {};", walk_expression(*ret.expression, ctx).c_code)
 }
 
-fn walk_bool_expr(node: BoolExprNode, ctx: &mut Context) -> String {
-    let mut lhs_code = walk_add_expr(node.lhs, ctx);
+fn walk_bool_expr(node: BoolExprNode, ctx: &mut Context) -> TypedExpression {
+    let result = walk_add_expr(node.lhs, ctx);
 
-    for addent in node.comparison {
-        lhs_code += match addent.operator {
-            BoolOp::Equal => format!("=={}", walk_add_expr(addent.rhs, ctx)),
-            BoolOp::LessThan => format!("<{}", walk_add_expr(addent.rhs, ctx)),
+    let mut c_code = result.c_code;
+
+    for addent in node.comparison.clone() {
+        c_code += match addent.operator {
+            BoolOp::Equal => format!("=={}", walk_add_expr(addent.rhs, ctx).c_code),
+            BoolOp::LessThan => format!("<{}", walk_add_expr(addent.rhs, ctx).c_code),
         }
         .as_str();
     }
 
-    lhs_code
+    TypedExpression {
+        c_code,
+        expr_type: if node.comparison.is_empty() {
+            result.expr_type
+        } else {
+            "boolean".to_string()
+        },
+    }
 }
 
-fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> String {
-    let mut lhs_code = walk_mul_expr(add.lhs, ctx);
+fn walk_add_expr(add: AddExprNode, ctx: &mut Context) -> TypedExpression {
+    let result = walk_mul_expr(add.lhs, ctx);
 
-    for addent in add.addent {
-        lhs_code += match addent.op {
-            AddOp::Add => format!("+{}", walk_mul_expr(addent.value, ctx)),
-            AddOp::Subtract => format!("-{}", walk_mul_expr(addent.value, ctx)),
+    let mut c_code = result.c_code;
+
+    for addent in add.addent.clone() {
+        c_code += match addent.op {
+            AddOp::Add => format!("+{}", walk_mul_expr(addent.value, ctx).c_code),
+            AddOp::Subtract => format!("-{}", walk_mul_expr(addent.value, ctx).c_code),
         }
         .as_str();
     }
 
-    lhs_code
+    TypedExpression {
+        c_code,
+        expr_type: if add.addent.is_empty() {
+            result.expr_type
+        } else {
+            "int".to_string()
+        },
+    }
 }
 
-fn walk_mul_expr(mul: MulExprNode, ctx: &mut Context) -> String {
-    let mut lhs_code = walk_primary(mul.lhs, ctx);
+fn walk_mul_expr(mul: MulExprNode, ctx: &mut Context) -> TypedExpression {
+    let result = walk_primary(mul.lhs, ctx);
 
-    for factor in mul.rhs {
-        lhs_code += match factor.op {
-            MulOp::Multiply => format!("*{}", walk_primary(factor.value, ctx)),
-            MulOp::Divide => format!("/{}", walk_primary(factor.value, ctx)),
+    let mut c_code = result.c_code;
+
+    for factor in mul.rhs.clone() {
+        c_code += match factor.op {
+            MulOp::Multiply => format!("*{}", walk_primary(factor.value, ctx).c_code),
+            MulOp::Divide => format!("/{}", walk_primary(factor.value, ctx).c_code),
         }
         .as_str()
     }
 
-    lhs_code
+    TypedExpression {
+        c_code,
+        expr_type: if mul.rhs.is_empty() {
+            result.expr_type
+        } else {
+            "boolean".to_string()
+        },
+    }
 }
 
-fn walk_primary(primary: PrimaryNode, ctx: &mut Context) -> String {
+fn walk_primary(primary: PrimaryNode, ctx: &mut Context) -> TypedExpression {
     match primary.kind {
-        PrimaryKind::IntLit(val) => val.to_string(),
-        PrimaryKind::FuncCall(node) => walk_func_call(node, ctx),
-        PrimaryKind::VarAccess(val) => val.name,
-        PrimaryKind::FloatLit(val) => val.to_string(),
-        PrimaryKind::StructInit(node) => walk_struct_init(node, ctx),
-        PrimaryKind::StrLit(val) => walk_str_lit(val, ctx),
-        PrimaryKind::StructFieldAccess(node) => walk_struct_field_access(node, ctx),
+        PrimaryKind::IntLit(val) => TypedExpression {
+            c_code: val.to_string(),
+            expr_type: "int".to_string(),
+        },
+        PrimaryKind::FuncCall(node) => TypedExpression {
+            expr_type: "todo".to_string(),
+            c_code: walk_func_call(node, ctx),
+        },
+        PrimaryKind::VarAccess(node) => TypedExpression {
+            expr_type: "todo".to_string(),
+            c_code: node.name,
+        },
+        PrimaryKind::FloatLit(node) => TypedExpression {
+            expr_type: "float".to_string(),
+            c_code: node.to_string(),
+        },
+
+        PrimaryKind::StructInit(node) => TypedExpression {
+            expr_type: "todo".to_string(),
+            c_code: walk_struct_init(node, ctx),
+        },
+
+        PrimaryKind::StrLit(node) => TypedExpression {
+            expr_type: "string".to_string(),
+            c_code: walk_str_lit(node, ctx),
+        },
+
+        PrimaryKind::StructFieldAccess(node) => TypedExpression {
+            expr_type: "todo".to_string(),
+            c_code: walk_struct_field_access(node, ctx),
+        },
     }
 }
 
@@ -320,7 +428,7 @@ fn walk_struct_init(node: StructInitNode, ctx: &mut Context) -> String {
         fields = node
             .fields
             .into_iter()
-            .map(|f| format!(".{} = {}", f.name, walk_expression(*f.value, ctx)))
+            .map(|f| format!(".{} = {}", f.name, walk_expression(*f.value, ctx).c_code))
             .collect::<Vec<String>>()
             .join(", ")
     )
@@ -331,7 +439,7 @@ fn walk_func_call(func_call: FuncCallNode, ctx: &mut Context) -> String {
         .clone()
         .params
         .into_iter()
-        .map(|param| walk_expression(param, ctx))
+        .map(|param| walk_expression(param, ctx).c_code)
         .collect::<Vec<String>>()
         .join(", ");
 
@@ -387,7 +495,7 @@ fn walk_block(block: BlockNode, ctx: &mut Context) -> String {
     let results: Vec<String> = block
         .expressions
         .into_iter()
-        .map(|expr| walk_expression(expr, ctx) + ";\n")
+        .map(|expr| walk_expression(expr, ctx).c_code + ";\n")
         .collect();
 
     ctx.scope_stack.pop();

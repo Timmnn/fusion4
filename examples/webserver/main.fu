@@ -5,20 +5,23 @@ _c_import "<stdlib.h>" (exit:function EXIT_FAILURE:function)
 _c_import "<string.h>" (strlen:function)
 _c_import "<unistd.h>" (close:function)
 
-let PORT = 8080 as int
-let BUFFER_SIZE = 1024 as int
+PORT := 8080
+BUFFER_SIZE := 1024
 
 while 1 {
-    let server_fd = socket(AF_INET, SOCK_STREAM, 0) as int
+    server_fd := socket(AF_INET, SOCK_STREAM, 0) as int
     if server_fd == 0 {
         perror("Socket failed")
         exit(EXIT_FAILURE)
     }
 
-    let opt = 1 as int
-    let x = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, 4) as int
+	opt := 1
 
-    let server_addr = sockaddr_in {
+
+
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, 4)
+
+    server_addr := sockaddr_in {
         sin_family: AF_INET
         sin_port: htons(PORT)
         sin_addr: in_addr {
@@ -26,14 +29,14 @@ while 1 {
         }
     } as sockaddr_in
 
-    let bind_result = bind(server_fd, &server_addr, 16) as int
+    bind_result := bind(server_fd, &server_addr, 16) as int
 
     if bind_result < 0 {
         perror("Bind failed")
         exit(EXIT_FAILURE)
     }
 
-    let listen_result = listen(server_fd, 3) as int
+    listen_result := listen(server_fd, 3) as int
     if listen_result < 0 {
         perror("Listen failed")
         exit(EXIT_FAILURE)
@@ -42,10 +45,10 @@ while 1 {
     printf("Server listening on port %d...\n", PORT)
 
     while 1 {
-        let client_addr = sockaddr_in {} as sockaddr_in
-        let client_len = 16 as socklen_t
+        client_addr := sockaddr_in {} as sockaddr_in
+        client_len := 16 as socklen_t
 
-        let new_socket = accept(server_fd, &client_addr, &client_len) as int
+        new_socket := accept(server_fd, &client_addr, &client_len) as int
         if new_socket < 0 {
             perror("Accept failed")
             continue
@@ -54,11 +57,11 @@ while 1 {
         // let buffer = array of char with BUFFER_SIZE
         //let _ = read(new_socket, buffer, BUFFER_SIZE)
 
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!" as string 
-        let x = write(new_socket, response, strlen(response)) as int
+        response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!" as string 
+        write(new_socket, response, strlen(response))
 
-        let x1 = close(new_socket) as int
+        close(new_socket)
     }
 
-    let x2 = close(server_fd) as int
+    close(server_fd)
 }

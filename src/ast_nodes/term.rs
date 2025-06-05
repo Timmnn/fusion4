@@ -8,7 +8,7 @@ use std::fmt::{Debug, Formatter, Result};
 pub struct VarDeclNode {
     pub name: String,
     pub value: Box<ExpressionNode>,
-    pub var_type: String,
+    pub var_type: Option<String>,
 }
 
 #[derive(Debug, Clone)]
