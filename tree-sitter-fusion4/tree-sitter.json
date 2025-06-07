@@ -1,0 +1,39 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "fusion4",
+      "camelcase": "Fusion4",
+      "title": "Fusion4",
+      "scope": "source.fusion4",
+      "file-types": [
+        "fusion4"
+      ],
+      "injection-regex": "^fusion4$",
+      "class-name": "TreeSitterFusion4"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Parser for my Fusion Lang :)",
+    "authors": [
+      {
+        "name": "Timm Nicolaizik",
+        "email": "timmmmnn@gmail.com"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/Timmnn/fusion4"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": true,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true,
+    "zig": false
+  }
+}

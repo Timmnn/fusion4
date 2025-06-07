@@ -1,0 +1,34 @@
+[package]
+name = "tree-sitter-fusion4"
+description = "Parser for my Fusion Lang :)"
+version = "0.1.0"
+authors = ["Timm Nicolaizik <timmmmnn@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+keywords = ["incremental", "parsing", "tree-sitter", "fusion4"]
+categories = ["parser-implementations", "parsing", "text-editors"]
+repository = "https://github.com/timmnn/fusion4"
+edition = "2021"
+autoexamples = false
+
+build = "bindings/rust/build.rs"
+include = [
+  "bindings/rust/*",
+  "grammar.js",
+  "queries/*",
+  "src/*",
+  "tree-sitter.json",
+  "LICENSE",
+]
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1"
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+tree-sitter = "0.25.3"
